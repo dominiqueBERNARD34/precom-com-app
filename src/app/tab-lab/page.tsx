@@ -1,0 +1,1 @@
+export default function Page(){return (<div>TabLab: veuillez coller le code complet depuis le chat.</div>)}
