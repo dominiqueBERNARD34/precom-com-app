@@ -8,7 +8,7 @@ type Row = Record<string, any>;
 
 const REQUIRED = ['system_name', 'subsystem_code'] as const;
 
-const ALIASES: Record<(typeof REQUIRED)[number] | 'subsystem_name', string[]> = {
+const ALIASES: Record<typeof REQUIRED[number] | 'subsystem_name', string[]> = {
   system_name: ['system_name', 'systeme', 'système', 'sys', 'system'],
   subsystem_code: ['subsystem_code', 'ss', 'code ss', 'ss code', 'code_ss'],
   subsystem_name: ['subsystem_name', 'nom ss', 'libellé ss', 'libelle ss'],
