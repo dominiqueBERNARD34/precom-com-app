@@ -1,7 +1,7 @@
 
 'use client'
 import { useEffect, useState, useMemo } from 'react'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase } from '../../lib/supabaseClient'
 type Row = { system_name: string | null; subsystems: { id:string, name:string }[]; count: number }
 export default function SystemsPage() {
   const [rows, setRows] = useState<Row[]>([]); const [loading, setLoading] = useState(true)
