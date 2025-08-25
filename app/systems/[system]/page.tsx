@@ -1,7 +1,7 @@
 
 'use client'
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase } from '../../../lib/supabaseClient'
 import { useSearchParams } from 'next/navigation'
 type SS = { id:string, name:string, count:number }
 export default function SystemDetail({ params }: { params: { system: string } }) {
