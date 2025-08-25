@@ -1,4 +1,4 @@
-'use client';s
+'use client';
 
 import { useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
