@@ -1,7 +1,7 @@
 
 'use client'
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase } from '../lib/supabaseClient'
 type KPIs = { systems: number; subsystems: number; elements: number }
 export default function Home() {
   const [kpi, setKpi] = useState<KPIs>({ systems:0, subsystems:0, elements:0 })
