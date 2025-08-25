@@ -1,7 +1,7 @@
 
 'use client'
 import { useEffect, useState } from 'react'
-import { supabase } from '../../../lib/supabaseClient'
+import { supabase } from '../lib/supabaseClient'
 type ElementRow = { id:string; physical_tag:string; denomination:string|null; system_name:string|null }
 type SS = { id:string; name:string }
 export default function SubsystemPage({ params }: { params: { id: string } }) {
