@@ -1,38 +1,48 @@
-
 'use client'
-import { useEffect, useState, useMemo } from 'react'
-import { supabase } from '../../lib/supabaseClient'
-type Row = { system_name: string | null; subsystems: { id:string, name:string }[]; count: number }
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import supabase from '@/lib/supabaseClient';
+import Back from '@/components/Back';
+
+type System = { id: string; name: string };
+type Sub = { id: string; system_id: string; name: string; code: string|null };
+
 export default function SystemsPage() {
-  const [rows, setRows] = useState<Row[]>([]); const [loading, setLoading] = useState(true)
-  useEffect(()=>{(async()=>{
-    const { data } = await supabase.from('elements').select('id, system_name, subsystems(id,name)')
-    const map = new Map<string, { subs: Map<string,{id:string,name:string}>, count:number }>() 
-    for (const r of (data??[])) {
-      const sys = (r as any).system_name ?? '—'; const ss = (r as any).subsystems
-      if (!map.has(sys)) map.set(sys, { subs:new Map(), count:0 })
-      const slot = map.get(sys)!; slot.count++; if (ss?.id) slot.subs.set(ss.id, { id:ss.id, name:ss.name })
-    }
-    const rows_: Row[] = Array.from(map.entries()).map(([sys,val])=>({system_name:sys,subsystems:Array.from(val.subs.values()),count:val.count}))
-      .sort((a,b)=> String(a.system_name).localeCompare(String(b.system_name)))
-    setRows(rows_); setLoading(false)
-  })()},[])
-  const total = useMemo(()=> rows.reduce((s,r)=> s+r.count,0), [rows])
-  return (<div>
-    <h1 style={{ fontSize:24, marginBottom:8 }}>Systèmes</h1>
-    <p style={{ color:'#64748b', marginTop:0 }}>{loading ? 'Chargement…' : `${rows.length} système(s), ${total} éléments.`}</p>
-    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))', gap:12 }}>
-      {rows.map((r,idx)=>(<div key={idx} style={{ border:'1px solid #e5e7eb', borderRadius:12, padding:12 }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
-          <h3 style={{ margin:'4px 0 8px' }}>Système {r.system_name || '—'}</h3>
-          <span style={{ fontSize:12, color:'#64748b' }}>{r.count} éléments</span>
-        </div>
-        <ul style={{ listStyle:'none', padding:0, margin:0, display:'grid', gap:6 }}>
-          {r.subsystems.map(ss=>(<li key={ss.id}>
-            <a href={`/systems/${encodeURIComponent(r.system_name ?? '-') }?ss=${ss.id}`} style={{ textDecoration:'none', color:'#0f172a' }}>{ss.name}</a>
-          </li>))}
-        </ul>
-      </div>))}
+  const [systems, setSystems] = useState<System[]>([]);
+  const [subs, setSubs] = useState<Sub[]>([]);
+
+  useEffect(() => { (async () => {
+    const { data: sys } = await supabase.from('systems').select('id,name').order('name');
+    const { data: sb }  = await supabase.from('subsystems').select('id,system_id,name,code').order('name');
+    setSystems(sys ?? []); setSubs(sb ?? []);
+  })(); }, []);
+
+  return (
+    <div className="p-6 max-w-5xl mx-auto">
+      <Back href="/" />
+      <h1 className="text-3xl font-bold mt-2">Systèmes</h1>
+
+      <div className="space-y-6 mt-6">
+        {systems.map(s => (
+          <section key={s.id} className="border rounded p-4">
+            <h2 className="font-semibold text-xl">{s.name}</h2>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {subs.filter(x => x.system_id === s.id).map(x => (
+                <Link key={x.id} href={`/subsystems/${x.id}`}
+                  className="px-3 py-1 rounded border hover:bg-slate-50">
+                  {x.code ?? x.name}
+                </Link>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <div className="mt-10 flex gap-3">
+        <Link href="/systems/new" className="px-3 py-2 border rounded">
+          + Ajouter un système
+        </Link>
+      </div>
     </div>
-  </div>)
+  );
 }
