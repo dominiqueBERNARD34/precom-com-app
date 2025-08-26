@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
-import supabase from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 import Back from '@/componants/Back';
 
 type Row = Record<string, any>;
