@@ -15,12 +15,17 @@ const ALIASES: Record<string, string[]> = {
 };
 
 const norm = (s:any) => String(s ?? '').trim().toLowerCase();
-const mapHeader = (h:string) => {
+const mapHeader = (h: string) => {
   const k = norm(h);
-  for (const [dst, list] of Object.entries(ALIASES))
-    if (list.some(x => norm(x) === k)) return dst;
-  return h;
+  for (const [dst, list] of Object.entries(ALIASES)) {
+    // 👇 on type explicitement la callback et (au besoin) la liste
+    if ((list as string[]).some((x: string) => norm(x) === k)) {
+      return dst;
+    }
+  }
+  return k;
 };
+
 
 export default function ImportSystems() {
   const [file, setFile] = useState<File | null>(null);
