@@ -1,236 +1,123 @@
-'use client';
-
-import { useMemo, useState } from 'react';
+'use client'
+import { useState } from 'react';
 import * as XLSX from 'xlsx';
-import { supabase } from '@/lib/supabaseClient';
+import supabase from '@/lib/supabaseClient';
+import Back from '@/components/Back';
 
-/* ------------------------------------------------------------------ */
-/*  Types et normalisation                                             */
-/* ------------------------------------------------------------------ */
-
-type Row = {
-  system_name: string;
-  subsystem_code: string;   // si vide dans le fichier => __NO_SS__
-  subsystem_name?: string;  // optionnel
-};
-
+type Row = Record<string, any>;
 const NO_SS_CODE = '__NO_SS__';
-const NO_SS_NAME = 'Sans sous-système';
+const NO_SS_NAME = 'Sans sous‑système';
 
 const ALIASES: Record<string, string[]> = {
-  // nom du système
-  system_name: [
-    'system_name', 'système', 'systeme', 'system', 'sys', 'nom système',
-    'system name', 'nom systeme'
-  ],
-  // code du sous-système
-  subsystem_code: [
-    'subsystem_code', 'ss', 'code ss', 'ss code', 'code_ss', 'code',
-    'sous-système', 'sous-systeme', 'code sous-système', 'code sous-systeme'
-  ],
-  // libellé du sous-système (facultatif)
-  subsystem_name: [
-    'subsystem_name', 'nom ss', 'libellé ss', 'libelle ss', 'ss name',
-    'libellé_sous-système', 'designation ss', 'désignation ss'
-  ],
+  system_name:    ['system','système','sys','system name','nom systeme'],
+  subsystem_code: ['sub-system','subsystem','sous-système','ss','code ss','ss code','code'],
+  subsystem_name: ['sub-system name','subsystem name','nom ss','libellé ss','libelle ss']
 };
 
-const REQUIRED_KEYS = ['system_name']; // subsystem_code sera rempli par défaut si absent
+const norm = (s:any) => String(s ?? '').trim().toLowerCase();
+const mapHeader = (h:string) => {
+  const k = norm(h);
+  for (const [dst, list] of Object.entries(ALIASES))
+    if (list.some(x => norm(x) === k)) return dst;
+  return h;
+};
 
-function norm(v: unknown): string {
-  return String(v ?? '').trim();
-}
-
-function normHeader(h: string): string {
-  const key = norm(h).toLowerCase();
-  for (const [std, list] of Object.entries(ALIASES)) {
-    if (list.some(a => a.toLowerCase() === key)) return std;
-  }
-  return key;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Composant page                                                     */
-/* ------------------------------------------------------------------ */
-
-export default function ImportPage() {
+export default function ImportSystems() {
   const [file, setFile] = useState<File | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
-  const [status, setStatus] = useState<string>('');
-  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<string>();
 
-  const stats = useMemo(() => {
-    const systems = new Set(rows.map(r => r.system_name));
-    const subs = new Set(rows.map(r => `${r.system_name}::${r.subsystem_code || NO_SS_CODE}`));
-    return { systems: systems.size, subsystems: subs.size, rows: rows.length };
-  }, [rows]);
-
-  /* -------------------------- lecture Excel ------------------------- */
-
-  async function onPickFile(f: File) {
-    setFile(f);
-    setStatus('Lecture du fichier…');
-
+  async function read(f: File) {
     const buf = await f.arrayBuffer();
-    const wb = XLSX.read(buf, { type: 'array' });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const raw: Record<string, unknown>[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    const wb  = XLSX.read(buf, { type:'array' });
+    const ws  = wb.Sheets[wb.SheetNames[0]];
+    const js  = XLSX.utils.sheet_to_json<Row>(ws, { defval: '' });
 
-    // remap des en‑têtes + normalisation
-    const mapped = raw.map((r) => {
-      const obj: Record<string, string> = {};
-      for (const [k, v] of Object.entries(r)) {
-        const hk = normHeader(k);
-        obj[hk] = norm(v);
+    const mapped = js.map(r => {
+      const o: Row = {};
+      Object.entries(r).forEach(([k,v]) => o[mapHeader(k)] = v);
+      return o;
+    }).map(r => ({
+      system_name:    String(r.system_name || '').trim(),
+      subsystem_code: String(r.subsystem_code || '').trim(),
+      subsystem_name: String(r.subsystem_name || '').trim()
+    })).filter(r => r.system_name);
+
+    // Sans SS → cas "groupe sans sous‑système"
+    mapped.forEach(r => {
+      if (!r.subsystem_code && !r.subsystem_name) {
+        r.subsystem_code = NO_SS_CODE;
+        r.subsystem_name = NO_SS_NAME;
       }
-      return obj;
+      if (r.subsystem_code && !r.subsystem_name) r.subsystem_name = r.subsystem_code;
     });
 
-    // validation minimale + valeurs par défaut
-    const out: Row[] = mapped
-      .filter((r) => REQUIRED_KEYS.every(k => norm(r[k]) !== ''))
-      .map((r) => {
-        const sys = norm(r['system_name']);
-        const code = norm(r['subsystem_code']) || NO_SS_CODE;
-        const name =
-          norm(r['subsystem_name']) ||
-          (code === NO_SS_CODE ? NO_SS_NAME : '');
-        return {
-          system_name: sys,
-          subsystem_code: code,
-          ...(name ? { subsystem_name: name } : {}),
-        };
-      });
-
-    setRows(out);
-    setStatus(`Fichier lu : ${out.length} ligne(s) valide(s).`);
+    setRows(mapped); setFile(f); setMsg(undefined);
   }
 
-  /* ---------------------------- import DB --------------------------- */
-
-  async function runImport() {
+  async function importNow() {
     if (!rows.length) return;
-    setLoading(true);
-    setStatus('Import en cours…');
 
-    try {
-      // 1) Upsert des systèmes
-      const uniqueSystems = Array.from(new Set(rows.map(r => r.system_name))).filter(Boolean);
-      const systemsPayload = uniqueSystems.map((name) => ({ name }));
+    setMsg('Import…');
+    const systemsList = Array.from(new Set(rows.map(r => r.system_name))).map(name => ({ name }));
 
-      const { error: upSysErr } = await supabase
-        .from('systems')
-        .upsert(systemsPayload, { onConflict: 'name' }); // v2 : pas de 'returning'
-      if (upSysErr) throw upSysErr;
+    // 1) systems
+    const { error: e1 } = await supabase
+      .from('systems').upsert(systemsList, { onConflict: 'name', ignoreDuplicates: true });
+    if (e1) return setMsg('Erreur systèmes: ' + e1.message);
 
-      // Récupérer leurs ids
-      const { data: sysRows, error: selSysErr } = await supabase
-        .from('systems')
-        .select('id, name')
-        .in('name', uniqueSystems);
-      if (selSysErr) throw selSysErr;
+    const { data: systems } = await supabase
+      .from('systems').select('id,name').in('name', systemsList.map(s => s.name));
+    const byName = new Map(systems?.map(s => [s.name, s.id]));
 
-      const sysIdByName = new Map<string, string>();
-      (sysRows ?? []).forEach(s => sysIdByName.set(s.name, s.id));
+    // 2) subsystems
+    const subsPayload = Array.from(new Map(rows.map(r => {
+      const key = `${r.system_name}__${r.subsystem_name}`;
+      return [key, {
+        system_id: byName.get(r.system_name)!,
+        name:      r.subsystem_name,
+        code:      r.subsystem_code || null
+      }];
+    })).values());
 
-      // 2) Upsert des sous‑systèmes (unique par (system_id, code))
-      const subMap = new Map<string, { system_id: string; code: string; name?: string }>();
-      for (const r of rows) {
-        const system_id = sysIdByName.get(r.system_name);
-        if (!system_id) continue; // sécurité
-        const code = r.subsystem_code || NO_SS_CODE;
-        const key = `${system_id}::${code}`;
-        if (!subMap.has(key)) {
-          subMap.set(key, {
-            system_id,
-            code,
-            ...(r.subsystem_name ? { name: r.subsystem_name } : {}),
-          });
-        }
-      }
-      const subsystemsPayload = Array.from(subMap.values());
+    const { error: e2 } = await supabase
+      .from('subsystems').upsert(subsPayload, { onConflict: 'system_id,name', ignoreDuplicates: true });
+    if (e2) return setMsg('Erreur sous‑systèmes: ' + e2.message);
 
-      const { error: upSubErr } = await supabase
-        .from('subsystems')
-        .upsert(subsystemsPayload, { onConflict: 'system_id,code' });
-      if (upSubErr) throw upSubErr;
-
-      setStatus(
-        `✅ Import terminé : ${uniqueSystems.length} système(s), ` +
-        `${subsystemsPayload.length} sous‑système(s).`
-      );
-    } catch (e: any) {
-      console.error(e);
-      setStatus(`❌ Erreur import : ${e?.message ?? e}`);
-    } finally {
-      setLoading(false);
-    }
+    setMsg(`OK – ${systemsList.length} système(s) et ${subsPayload.length} sous‑système(s) mis à jour.`);
   }
-
-  /* ----------------------------- rendu UI --------------------------- */
 
   return (
-    <div style={{ padding: 16, maxWidth: 920 }}>
-      <h1>Import Systèmes / Sous‑systèmes</h1>
-      <p>
-        Sélectionnez un fichier Excel (.xlsx/.xls) contenant au minimum
-        la colonne <code>system_name</code>. Si <code>subsystem_code</code> est
-        vide, la ligne sera rangée dans le groupe <b>{NO_SS_NAME}</b>.
+    <main className="p-6 max-w-4xl mx-auto">
+      <Back href="/" />
+      <h1 className="text-2xl font-bold">Import Systèmes / Sous‑systèmes</h1>
+      <p className="text-sm text-slate-600 mt-2">
+        Colonnes Excel attendues : <b>System</b>, facultatif <b>Sub‑System</b> & <b>Sub‑System Name</b>.<br />
+        Les lignes sans sous‑système seront rangées dans <i>{NO_SS_NAME}</i>.
       </p>
 
-      <div
-        style={{
-          display: 'flex',
-          gap: 12,
-          alignItems: 'center',
-          margin: '12px 0',
-          flexWrap: 'wrap',
-        }}
-      >
-        <input
-          type="file"
-          accept=".xlsx,.xls"
-          onChange={(e) => {
-            const f = e.target.files?.[0] || null;
-            if (f) onPickFile(f);
-          }}
-        />
-        {file && <span>Fichier : <b>{file.name}</b></span>}
-        <button
-          onClick={runImport}
-          disabled={!rows.length || loading}
-          style={{ padding: '8px 14px' }}
-        >
-          {loading ? 'Import…' : 'Importer'}
-        </button>
-      </div>
-
-      <div style={{ margin: '8px 0', color: '#555' }}>{status}</div>
+      <label className="inline-block mt-4 px-3 py-2 border rounded cursor-pointer">
+        Choisir un fichier
+        <input type="file" className="hidden" accept=".xlsx,.xls"
+               onChange={(e)=> e.target.files && read(e.target.files[0])}/>
+      </label>
 
       {rows.length > 0 && (
-        <div
-          style={{
-            marginTop: 8,
-            padding: 12,
-            border: '1px solid #eee',
-            borderRadius: 8,
-            background: '#fafafa',
-          }}
-        >
-          <b>Aperçu</b>
-          <ul>
-            <li>{stats.rows} ligne(s) valide(s) détectée(s)</li>
-            <li>{stats.systems} système(s) unique(s)</li>
-            <li>{stats.subsystems} sous‑système(s) unique(s)</li>
-          </ul>
-          <details>
-            <summary>Voir les 10 premières lignes</summary>
-            <pre style={{ whiteSpace: 'pre-wrap' }}>
-              {JSON.stringify(rows.slice(0, 10), null, 2)}
+        <>
+          <div className="mt-4">
+            <button className="px-4 py-2 border rounded" onClick={importNow}>
+              Importer
+            </button>
+          </div>
+          <details className="mt-3">
+            <summary className="cursor-pointer">Voir les 10 premières lignes</summary>
+            <pre className="text-xs bg-slate-50 p-2 rounded mt-2">
+{JSON.stringify(rows.slice(0,10), null, 2)}
             </pre>
           </details>
-        </div>
+        </>
       )}
-    </div>
+      {msg && <p className="mt-4">{msg}</p>}
+    </main>
   );
 }
