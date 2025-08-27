@@ -31,25 +31,26 @@ export default function ImportPage() {
   const [session, setSession] = useState<null | { user: any }>(null);
   const [ready, setReady] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
+useEffect(() => {
+  let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setSession(data.session);
-      setReady(true);
-    });
+  supabase.auth.getSession().then(({ data }) => {
+    if (!mounted) return;
+    setSession(data.session);
+    setReady(true);
+  });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_evt, s) => {
-      if (!mounted) return;
-      setSession(s);
-    });
+  // ✅ version qui expose directement 'subscription'
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((_evt, s) => {
+    if (!mounted) return;
+    setSession(s);
+  });
 
-    return () => {
-      mounted = false;
-      sub.subscription.unsubscribe(); // si erreur de typage, voir note ci‑dessous
-    };
-  }, []);
+  return () => {
+    mounted = false;
+    subscription.unsubscribe();
+  };
+}, []);
 
   if (!ready) return null;
 
