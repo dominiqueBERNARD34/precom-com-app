@@ -1,51 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabaseClient';
 
-export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [sent, setSent] = useState(false);
-  const [loading, setLoading] = useState(false);
+export default function AuthCallbackPage() {
+  const router = useRouter();
+  const [msg, setMsg] = useState('Connexion en cours…');
 
-  async function handleSignIn(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        // après login, on vous renvoie directement vers la page d'import
-        emailRedirectTo: `${location.origin}/import`,
-      },
-    });
-    setLoading(false);
-    if (error) alert(error.message);
-    else setSent(true);
-  }
+  useEffect(() => {
+    // termine la session avec le code présent dans l’URL
+    supabase.auth.exchangeCodeForSession(window.location.href)
+      .then(({ error }) => {
+        if (error) setMsg(`Erreur: ${error.message}`);
+        else router.replace('/import'); // redirige où vous voulez
+      });
+  }, [router]);
 
-  return (
-    <main style={{ padding: 24 }}>
-      <h1>Connexion</h1>
-      {sent ? (
-        <p>Un lien de connexion vient d’être envoyé à <b>{email}</b>. Ouvrez‑le puis revenez ici.</p>
-      ) : (
-        <form onSubmit={handleSignIn} style={{ display: 'grid', gap: 12, maxWidth: 360 }}>
-          <label>
-            Votre e‑mail
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="vous@exemple.com"
-              style={{ width: '100%', padding: 8 }}
-            />
-          </label>
-          <button type="submit" disabled={loading}>
-            {loading ? 'Envoi…' : 'Recevoir un lien magique'}
-          </button>
-        </form>
-      )}
-    </main>
-  );
+  return <main className="p-6"><p>{msg}</p></main>;
 }
