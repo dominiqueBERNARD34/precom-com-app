@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/lib/supabaseClient';
-import Back from '@/componants/Back';
+import Back from '@/components/Back';
 
 type Row = Record<string, any>;
 const NO_SS_CODE = '__NO_SS__';
