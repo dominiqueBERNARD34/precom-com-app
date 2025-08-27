@@ -1,9 +1,49 @@
 'use client'
-import { useState } from 'react';
-import * as XLSX from 'xlsx';
-import { supabase } from '@/lib/supabaseClient';
-import Back from '@/components/Back';
 
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import supabase from '@/lib/supabaseClient';
+
+// … vos imports existants (XLSX, etc.)
+
+export default function ImportPage() {
+  const [session, setSession] = useState<null | { user: any }>(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setSession(data.session);
+      setReady(true);
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, s) => {
+      if (!mounted) return;
+      setSession(s);
+    });
+
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  if (!ready) return null; // évite un clignotement
+
+  if (!session) {
+    return (
+      <main style={{ padding: 24 }}>
+        <h1>Import Systèmes / Sous‑systèmes</h1>
+        <p>Vous devez être connecté pour importer.</p>
+        <Link href="/login">Se connecter</Link>
+      </main>
+    );
+  }
+
+  // --- À partir d’ici, votre code d'import actuel (lecture xlsx, upsert supabase, etc.)
+}
 type Row = Record<string, any>;
 const NO_SS_CODE = '__NO_SS__';
 const NO_SS_NAME = 'Sans sous‑système';
