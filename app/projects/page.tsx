@@ -33,7 +33,7 @@ export default function ProjectsPage() {
                className="border rounded px-3 py-2 flex-1" />
         <button onClick={add} className="px-4 py-2 rounded bg-cyan-600 text-white">Créer</button>
       </div>
-
+   
       {msg && <p className="text-sm text-red-600">{msg}</p>}
 
       <ul className="divide-y border rounded">
