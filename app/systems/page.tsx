@@ -1,48 +1,93 @@
-'use client'
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
+'use client';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabaseClient';
-import Back from '@/components/Back';
 
-type System = { id: string; name: string };
-type Sub = { id: string; system_id: string; name: string; code: string|null };
+type System = { id:string; name:string };
+type Subsystem = { id:string; name:string; system_id:string };
 
 export default function SystemsPage() {
+  const projectId = useSearchParams().get('project')!;
   const [systems, setSystems] = useState<System[]>([]);
-  const [subs, setSubs] = useState<Sub[]>([]);
+  const [subs, setSubs] = useState<Subsystem[]>([]);
+  const [newSys, setNewSys] = useState('');
+  const [newSub, setNewSub] = useState('');
+  const [currentSys, setCurrentSys] = useState<string>('');
+  const [msg, setMsg] = useState<string>();
 
-  useEffect(() => { (async () => {
-    const { data: sys } = await supabase.from('systems').select('id,name').order('name');
-    const { data: sb }  = await supabase.from('subsystems').select('id,system_id,name,code').order('name');
-    setSystems(sys ?? []); setSubs(sb ?? []);
-  })(); }, []);
+  async function load() {
+    const { data: s, error: e1 } = await supabase.from('systems').select('id,name').eq('project_id', projectId).order('created_at');
+    if (e1) { setMsg(e1.message); return; }
+    setSystems(s || []);
+    if (s?.length && !currentSys) setCurrentSys(s[0].id);
+
+    const { data: sub, error: e2 } = await supabase.from('subsystems').select('id,name,system_id').eq('project_id', projectId).order('created_at');
+    if (e2) { setMsg(e2.message); return; }
+    setSubs(sub || []);
+  }
+
+  useEffect(()=>{ if(projectId) load(); },[projectId]);
+
+  async function addSystem() {
+    const { error } = await supabase.from('systems').insert({ project_id: projectId, name: newSys });
+    if (error) { setMsg(error.message); return; }
+    setNewSys(''); load();
+  }
+
+  async function addSub() {
+    if (!currentSys) return;
+    const { error } = await supabase.from('subsystems').insert({ project_id: projectId, system_id: currentSys, name: newSub });
+    if (error) { setMsg(error.message); return; }
+    setNewSub(''); load();
+  }
+
+  const subsOfCurrent = useMemo(()=>subs.filter(s=>s.system_id===currentSys),[subs,currentSys]);
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <Back href="/" />
-      <h1 className="text-3xl font-bold mt-2">Systèmes</h1>
+    <main className="p-6 max-w-5xl mx-auto space-y-6">
+      <h1 className="text-2xl font-bold">Systèmes du projet</h1>
+      {msg && <p className="text-sm text-red-600">{msg}</p>}
 
-      <div className="space-y-6 mt-6">
-        {systems.map(s => (
-          <section key={s.id} className="border rounded p-4">
-            <h2 className="font-semibold text-xl">{s.name}</h2>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {subs.filter(x => x.system_id === s.id).map(x => (
-                <Link key={x.id} href={`/subsystems/${x.id}`}
-                  className="px-3 py-1 rounded border hover:bg-slate-50">
-                  {x.code ?? x.name}
-                </Link>
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
+      <section className="grid grid-cols-2 gap-8">
+        <div>
+          <h2 className="font-semibold mb-2">Systèmes</h2>
+          <div className="flex gap-2 mb-3">
+            <input value={newSys} onChange={e=>setNewSys(e.target.value)} placeholder="Nom du système"
+                   className="border rounded px-3 py-2 flex-1" />
+            <button onClick={addSystem} className="px-4 py-2 rounded bg-cyan-600 text-white">Ajouter</button>
+          </div>
 
-      <div className="mt-10 flex gap-3">
-        <Link href="/systems/new" className="px-3 py-2 border rounded">
-          + Ajouter un système
-        </Link>
+          <ul className="divide-y border rounded">
+            {systems.map(s=>(
+              <li key={s.id} onClick={()=>setCurrentSys(s.id)}
+                  className={`p-3 cursor-pointer ${currentSys===s.id?'bg-cyan-50':''}`}>{s.name}</li>
+            ))}
+            {systems.length===0 && <li className="p-3 text-sm text-slate-500">Aucun système</li>}
+          </ul>
+        </div>
+
+        <div>
+          <h2 className="font-semibold mb-2">Sous‑systèmes</h2>
+          <div className="flex gap-2 mb-3">
+            <input value={newSub} onChange={e=>setNewSub(e.target.value)} placeholder="Nom du sous‑système"
+                   className="border rounded px-3 py-2 flex-1" />
+            <button onClick={addSub} className="px-4 py-2 rounded bg-cyan-600 text-white">Ajouter</button>
+          </div>
+
+          <ul className="divide-y border rounded">
+            {subsOfCurrent.map(ss=>(
+              <li key={ss.id} className="p-3">{ss.name}</li>
+            ))}
+            {subsOfCurrent.length===0 && <li className="p-3 text-sm text-slate-500">Aucun sous‑système</li>}
+          </ul>
+        </div>
+      </section>
+
+      <div className="mt-8">
+        <a className="text-cyan-600 underline" href={`/import?project=${projectId}`}>
+          Importer systèmes / sous‑systèmes (Excel)
+        </a>
       </div>
-    </div>
+    </main>
   );
 }
