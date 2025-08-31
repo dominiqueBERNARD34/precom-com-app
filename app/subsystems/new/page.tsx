@@ -1,51 +1,30 @@
-'use client'
-import { useSearchParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import supabase from '@/lib/supabaseClient';
-import Back from '@/components/Back';
+'use client';
 
-export default function NewSubsystem() {
-  const sp = useSearchParams();
-  const preSystem = sp.get('system_id') ?? '';
-  const [systems, setSystems] = useState<any[]>([]);
-  const [systemId, setSystemId] = useState(preSystem);
-  const [name, setName] = useState('');
-  const [code, setCode] = useState('');
-  const router = useRouter();
+import { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 
-  useEffect(() => { (async () => {
-    const { data } = await supabase.from('systems').select('id,name').order('name');
-    setSystems(data ?? []);
-  })(); }, []);
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-  const save = async () => {
-    if (!systemId || !name.trim()) return;
-    const row = { system_id: systemId, name: name.trim(), code: code.trim() || null };
-    const { data, error } = await supabase.from('subsystems').insert(row).select().single();
-    if (!error && data) router.push(`/systems/${systemId}`);
-  };
+function NewSubsystemInner() {
+  const params = useSearchParams();
+  // Exemple : lecture d’un éventuel project_id dans l’URL
+  const projectId = params.get('project_id') ?? '';
 
+  // TODO: mets ici ton JSX existant pour la création d’un SS
   return (
-    <div className="p-6 max-w-xl mx-auto">
-      <Back href={systemId ? `/systems/${systemId}` : '/systems'} />
-      <h1 className="text-2xl font-semibold mt-2">Nouveau sous‑système</h1>
+    <main className="p-6">
+      <h1>Nouveau sous‑système</h1>
+      <p>Projet : {projectId || '—'}</p>
+      {/* ...le reste de ton contenu existant... */}
+    </main>
+  );
+}
 
-      <label className="block mt-4 text-sm">Système</label>
-      <select className="border rounded px-3 py-2 w-full" value={systemId}
-              onChange={e=>setSystemId(e.target.value)}>
-        <option value="">— Choisir —</option>
-        {systems.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-      </select>
-
-      <label className="block mt-4 text-sm">Libellé sous‑système</label>
-      <input className="border rounded px-3 py-2 w-full" value={name}
-             onChange={e=>setName(e.target.value)} placeholder="ex. BT"/>
-
-      <label className="block mt-4 text-sm">Code (optionnel)</label>
-      <input className="border rounded px-3 py-2 w-full" value={code}
-             onChange={e=>setCode(e.target.value)} placeholder="ex. A01‑0"/>
-
-      <button onClick={save} className="mt-4 px-4 py-2 border rounded">Enregistrer</button>
-    </div>
+export default function NewSubsystemPage() {
+  return (
+    <Suspense fallback={null}>
+      <NewSubsystemInner />
+    </Suspense>
   );
 }
