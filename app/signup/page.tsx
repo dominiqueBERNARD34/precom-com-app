@@ -1,4 +1,4 @@
-// app/signup/page.tsx (Server Component possible)
+// app/signup/page.tsx  (Server Component)
 import { Suspense } from 'react';
 import Client from './client';
 
@@ -11,13 +11,4 @@ export default function Page() {
       <Client />
     </Suspense>
   );
-}
-
-// app/signup/client.tsx (Client Component)
-'use client';
-import { useSearchParams } from 'next/navigation';
-
-export default function Client() {
-  const params = useSearchParams();
-  // ... ton JSX
 }
