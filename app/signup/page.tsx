@@ -1,33 +1,23 @@
-'use client';
-
+// app/signup/page.tsx (Server Component possible)
 import { Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import Client from './client';
 
-// Empêche le pré‑rendu statique : la page est calculée à la requête
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-function SignupInner() {
-  // ← si tu lis ?plan=starter, etc.
-  const params = useSearchParams();
-  const plan = params.get('plan') ?? 'free';
-
-  // TODO: mets ici ton JSX existant de la page /signup
-  // en utilisant "plan" si besoin
+export default function Page() {
   return (
-    <main className="p-6">
-      <h1>Inscription</h1>
-      <p>Plan sélectionné : {plan}</p>
-      {/* ...le reste de ton contenu existant... */}
-    </main>
+    <Suspense fallback={null}>
+      <Client />
+    </Suspense>
   );
 }
 
-export default function SignupPage() {
-  // ⬇️ la Suspense lève la contrainte de Next pour useSearchParams()
-  return (
-    <Suspense fallback={null}>
-      <SignupInner />
-    </Suspense>
-  );
+// app/signup/client.tsx (Client Component)
+'use client';
+import { useSearchParams } from 'next/navigation';
+
+export default function Client() {
+  const params = useSearchParams();
+  // ... ton JSX
 }
