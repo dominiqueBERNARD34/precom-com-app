@@ -24,21 +24,15 @@ export async function POST(req: Request) {
     return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 });
   }
 
-  // Traitez ici les événements utiles
   switch (event.type) {
     case 'checkout.session.completed':
-      // const session = event.data.object as Stripe.Checkout.Session;
-      // TODO: lier session au user / plan
       break;
-    case 'customer.subscription.updated':
     case 'customer.subscription.created':
+    case 'customer.subscription.updated':
     case 'customer.subscription.deleted':
-      // TODO: maj du plan/profil
       break;
     default:
-      // laissez passer les autres pour le moment
       break;
   }
-
   return NextResponse.json({ received: true });
 }
