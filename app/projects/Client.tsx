@@ -1,3 +1,4 @@
+// app/projects/Client.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -6,78 +7,159 @@ import Link from 'next/link';
 
 type Project = { id: string; name: string; created_at: string };
 
-export default function ProjectsClient() {
+export default function Client() {
+  const [loading, setLoading] = useState(true);
+  const [tenantId, setTenantId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [newName, setNewName] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  async function load() {
-    setMsg(null);
-    const { data, error } = await supabase
+  // Charge tenant_id depuis profiles -> puis charge les projets
+  useEffect(() => {
+    const run = async () => {
+      setLoading(true);
+      setError(null);
+
+      const { data: userRes, error: errUser } = await supabase.auth.getUser();
+      if (errUser) {
+        setError(errUser.message);
+        setLoading(false);
+        return;
+      }
+      const user = userRes.user;
+      if (!user) {
+        setError("Vous n'êtes pas connecté.");
+        setLoading(false);
+        return;
+      }
+
+      const { data: profile, error: errProfile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (errProfile) {
+        setError(errProfile.message);
+        setLoading(false);
+        return;
+      }
+
+      if (!profile) {
+        setError("Profil introuvable. Connectez‑vous puis réessayez.");
+        setLoading(false);
+        return;
+      }
+
+      setTenantId(profile.tenant_id);
+
+      const { data: projs, error: errProjs } = await supabase
+        .from('projects')
+        .select('id, name, created_at')
+        .eq('tenant_id', profile.tenant_id)
+        .order('created_at', { ascending: true });
+
+      if (errProjs) {
+        setError(errProjs.message);
+      } else {
+        setProjects(projs ?? []);
+      }
+      setLoading(false);
+    };
+    run();
+  }, []);
+
+  const createProject = async () => {
+    if (!tenantId) return;
+    const name = newName.trim();
+    if (!name) return;
+
+    setCreating(true);
+    setError(null);
+
+    const { data, error: err } = await supabase
       .from('projects')
-      .select('id,name,created_at')
-      .order('created_at', { ascending: false });
-    if (error) setMsg(error.message);
-    else setProjects(data ?? []);
-  }
-
-  useEffect(() => { load(); }, []);
-
-  async function createProject(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setMsg(null);
-
-    // Récupère l’utilisateur courant pour alimenter tenant_id
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setMsg('Veuillez vous connecter.'); setLoading(false); return; }
-
-    const { data, error } = await supabase
-      .from('projects')
-      .insert({ name: newName || 'Projet', tenant_id: user.id })
-      .select('id')
+      .insert([{ tenant_id: tenantId, name }])
+      .select('id, name, created_at')
       .single();
 
-    setLoading(false);
-    if (error) setMsg(error.message);
-    else window.location.href = `/import?project=${data!.id}`;
+    setCreating(false);
+
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    if (data) {
+      setProjects((prev) => [...prev, data]);
+      setNewName('');
+    }
+  };
+
+  if (loading) {
+    return <div className="opacity-70">Chargement…</div>;
   }
 
   return (
-    <div className="max-w-3xl mx-auto py-12 space-y-8">
-      <div>
-        <h1 className="text-4xl font-extrabold">Mes projets</h1>
-        <p className="text-slate-400 mt-2">Créez un projet puis importez systèmes / sous‑systèmes.</p>
+    <div className="space-y-8">
+      {error && (
+        <div className="rounded-md bg-red-900/30 border border-red-500 text-red-200 px-4 py-3">
+          {error}
+        </div>
+      )}
+
+      <div className="rounded-lg border border-white/10 bg-white/5 p-6">
+        <h2 className="text-xl font-medium mb-4">Créer un projet</h2>
+        <div className="flex gap-2">
+          <input
+            className="flex-1 rounded-md border border-white/10 bg-black/30 px-3 py-2 outline-none"
+            placeholder="Nom du projet"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+          />
+          <button
+            disabled={!tenantId || creating || !newName.trim()}
+            onClick={createProject}
+            className="rounded-md bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 px-4 py-2 text-black font-medium"
+          >
+            {creating ? 'Création…' : 'Créer'}
+          </button>
+        </div>
       </div>
 
-      <form onSubmit={createProject} className="flex gap-2">
-        <input
-          value={newName} onChange={e=>setNewName(e.target.value)}
-          placeholder="Nom du projet"
-          className="flex-1 border rounded px-3 py-2 bg-white/90 text-black"
-        />
-        <button disabled={loading} className="px-4 py-2 rounded bg-cyan-600 hover:bg-cyan-700 text-white">
-          {loading ? 'Création...' : 'Créer'}
-        </button>
-      </form>
-      {msg && <p className="text-red-400">{msg}</p>}
-
-      <ul className="divide-y divide-white/10">
-        {projects.map(p => (
-          <li key={p.id} className="py-3 flex items-center justify-between">
-            <div>
-              <div className="font-medium">{p.name}</div>
-              <div className="text-sm text-slate-400">{new Date(p.created_at).toLocaleString()}</div>
-            </div>
-            <div className="flex gap-2">
-              <Link className="underline" href={`/import?project=${p.id}`}>Importer</Link>
-              <Link className="underline" href={`/systems?project=${p.id}`}>Systèmes</Link>
-            </div>
-          </li>
-        ))}
-        {projects.length === 0 && <li className="py-6 text-slate-400">Aucun projet.</li>}
-      </ul>
+      <div className="rounded-lg border border-white/10 bg-white/5 p-6">
+        <h2 className="text-xl font-medium mb-4">Mes projets</h2>
+        {projects.length === 0 ? (
+          <div className="opacity-70">Aucun projet pour l’instant.</div>
+        ) : (
+          <ul className="divide-y divide-white/10">
+            {projects.map((p) => (
+              <li key={p.id} className="py-3 flex items-center justify-between gap-4">
+                <div>
+                  <div className="font-medium">{p.name}</div>
+                  <div className="text-sm opacity-60">
+                    Créé le {new Date(p.created_at).toLocaleString()}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Link
+                    href={`/systems?project=${p.id}`}
+                    className="rounded-md bg-slate-700 hover:bg-slate-600 px-3 py-2 text-white text-sm"
+                  >
+                    Systèmes
+                  </Link>
+                  <Link
+                    href={`/import?project=${p.id}`}
+                    className="rounded-md bg-cyan-500 hover:bg-cyan-400 px-3 py-2 text-black text-sm font-medium"
+                  >
+                    Import Excel
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
