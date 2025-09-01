@@ -1,38 +1,25 @@
 import { NextResponse } from 'next/server';
-import Stripe from 'stripe';
+import { headers } from 'next/headers';
+import { stripe } from '@/lib/stripe';
 
 export const runtime = 'nodejs';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  apiVersion: '2024-06-20',
-});
-
 export async function POST(req: Request) {
-  const sig = req.headers.get('stripe-signature');
   const whSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  const sig = headers().get('stripe-signature');
 
-  if (!sig || !whSecret) {
-    return new NextResponse('Missing signature or secret', { status: 400 });
+  // Tant que Stripe n’est pas branché, on no-op proprement
+  if (!process.env.STRIPE_SECRET_KEY || !whSecret || !sig) {
+    return NextResponse.json({ ok: true, skipped: true }, { status: 200 });
   }
 
-  let event: Stripe.Event;
   const rawBody = await req.text();
 
   try {
-    event = stripe.webhooks.constructEvent(rawBody, sig, whSecret);
+    const event = stripe.webhooks.constructEvent(rawBody, sig, whSecret);
+    // TODO: gérer vos events ici (customer.subscription.updated, etc.)
+    return NextResponse.json({ received: true }, { status: 200 });
   } catch (err: any) {
-    return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 });
+    return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
   }
-
-  switch (event.type) {
-    case 'checkout.session.completed':
-      break;
-    case 'customer.subscription.created':
-    case 'customer.subscription.updated':
-    case 'customer.subscription.deleted':
-      break;
-    default:
-      break;
-  }
-  return NextResponse.json({ received: true });
 }
