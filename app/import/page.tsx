@@ -1,155 +1,156 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import supabase from '@/lib/supabaseClient';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
+import supabase from '@/lib/supabaseClient';
 
-type Row = { system_name: string; subsystem_code?: string; subsystem_name?: string };
-type Project = { id: string; name: string };
-
-const NO_SS_CODE = '__NO_SS__';
-const NO_SS_NAME = 'Sans sous-système';
-
-const ALIASES: Record<string, string[]> = {
-  system_name:    ['system','système','sys','system name','nom systeme', 'systeme'],
-  subsystem_code: ['sub-system','subsystem','sous-système','ss','code ss','ss code','code'],
-  subsystem_name: ['sub-system name','subsystem name','nom ss','libellé ss','libelle ss']
-};
-
-const norm = (s:any) => String(s ?? '').trim().toLowerCase();
-const mapHeader = (h: string) => {
-  const k = norm(h);
-  for (const [dst, list] of Object.entries(ALIASES)) {
-    if ((list as string[]).some((x) => norm(x) === k)) return dst;
-  }
-  return k;
+type Row = {
+  system_code?: string; system_name?: string;
+  subsystem_code?: string; subsystem_name?: string;
 };
 
 export default function ImportPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState<string>('');
+  const qs = useSearchParams();
+  const router = useRouter();
+  const projectId = qs.get('project');
+
+  const [projects, setProjects] = useState<{id: string; name: string}[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [log, setLog] = useState<string[]>([]);
+  const [running, setRunning] = useState(false);
 
   useEffect(() => {
-    // charge projets
-    supabase.from('projects').select('id,name').order('created_at', { ascending: false })
-      .then(({ data }) => setProjects(data ?? []));
-    // sélection automatique depuis ?project=...
-    const sp = new URLSearchParams(window.location.search);
-    const p = sp.get('project');
-    if (p) setProjectId(p);
+    (async () => {
+      const { data } = await supabase.from('projects').select('id,name').order('created_at',{ascending:false});
+      setProjects(data ?? []);
+    })();
   }, []);
 
-  async function read(f: File) {
-    const buf = await f.arrayBuffer();
-    const wb  = XLSX.read(buf, { type:'array' });
-    const ws  = wb.Sheets[wb.SheetNames[0]];
-    const js  = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: '' });
+  function addLog(s: string) { setLog(prev => [...prev, s]); }
 
-    const mapped = js.map(r => {
-      const o: Record<string, any> = {};
-      Object.entries(r).forEach(([k,v]) => o[mapHeader(k)] = v);
-      return o;
-    }).map(r => ({
-      system_name:    String(r.system_name || '').trim(),
-      subsystem_code: String(r.subsystem_code || '').trim(),
-      subsystem_name: String(r.subsystem_name || '').trim()
-    })).filter(r => r.system_name);
-
-    // Normalisation
-    mapped.forEach(r => {
-      if (!r.subsystem_code && !r.subsystem_name) {
-        r.subsystem_code = NO_SS_CODE;
-        r.subsystem_name = NO_SS_NAME;
-      }
-      if (r.subsystem_code && !r.subsystem_name) r.subsystem_name = r.subsystem_code;
-    });
-
-    setRows(mapped); setMsg(null);
+  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const wb = XLSX.read(reader.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json<any>(ws, { defval: '' }) as any[];
+      // normaliser les colonnes
+      const norm = (k: string) => k.trim().toLowerCase();
+      const mapped: Row[] = json.map(o => {
+        const m: any = {};
+        for (const [k, v] of Object.entries(o)) m[norm(k)] = (v ?? '').toString().trim();
+        return {
+          system_code: m['system_code'] ?? m['code_system'] ?? m['systeme_code'],
+          system_name: m['system_name'] ?? m['nom_system'] ?? m['systeme_nom'],
+          subsystem_code: m['subsystem_code'] ?? m['code_subsystem'] ?? m['sous_systeme_code'],
+          subsystem_name: m['subsystem_name'] ?? m['nom_subsystem'] ?? m['sous_systeme_nom'],
+        };
+      }).filter(r => r.system_name && r.subsystem_name);
+      setRows(mapped);
+      setLog([]);
+    };
+    reader.readAsArrayBuffer(f);
   }
 
-  async function importNow() {
-    if (!projectId) return setMsg('Choisissez un projet.');
-    if (!rows.length) return setMsg('Aucune ligne lue.');
+  const systemsByCode = useMemo(() => {
+    const map = new Map<string,string>(); // code -> id après création
+    return map;
+  }, []);
 
-    setLoading(true); setMsg('Import en cours…');
+  async function runImport() {
+    if (!projectId) { alert('Choisissez d’abord un projet'); return; }
+    if (!rows.length) { alert('Chargez un fichier Excel'); return; }
 
-    // 1) upsert systems
-    const systemsList = Array.from(new Set(rows.map(r => r.system_name)))
-      .map(name => ({ project_id: projectId, name }));
+    setRunning(true); setLog([]);
+    try {
+      // 1) Créer tous les systèmes uniques
+      const sysKey = (r: Row) => (r.system_code ?? r.system_name ?? '').trim();
+      const unique = Array.from(new Map(
+        rows.map(r => [sysKey(r), r])
+      ).values());
 
-    const { error: e1 } = await supabase
-      .from('systems')
-      .upsert(systemsList, { onConflict: 'project_id,name', ignoreDuplicates: true });
-    if (e1) { setLoading(false); return setMsg('Erreur systèmes: ' + e1.message); }
+      addLog(`Création des systèmes (uniques): ${unique.length}`);
+      for (const r of unique) {
+        const code = r.system_code || null;
+        const name = r.system_name || '(Sans nom)';
+        const { data, error } = await supabase.rpc('create_system', {
+          p_project_id: projectId, p_code: code, p_name: name
+        });
+        if (error) { addLog(`❌ Système "${name}" : ${error.message}`); continue; }
+        const id = (Array.isArray(data) ? data[0]?.id : (data as any)?.id) as string;
+        if (id) systemsByCode.set(sysKey(r), id);
+        addLog(`✅ Système "${name}"`);
+      }
 
-    const { data: systems } = await supabase
-      .from('systems').select('id,name').eq('project_id', projectId);
-    const byName = new Map(systems?.map(s => [s.name, s.id]));
+      // 2) Créer les sous-systèmes
+      addLog(`Création des sous-systèmes: ${rows.length}`);
+      for (const r of rows) {
+        const key = sysKey(r);
+        const systemId = systemsByCode.get(key);
+        if (!systemId) { addLog(`❌ Pas d’id système pour ${r.system_name}`); continue; }
+        const code = r.subsystem_code || null;
+        const name = r.subsystem_name || '(Sans nom)';
+        const { error } = await supabase.rpc('create_subsystem', {
+          p_system_id: systemId, p_code: code, p_name: name
+        });
+        if (error) { addLog(`❌ Sous-système "${name}" : ${error.message}`); continue; }
+        addLog(`✅ Sous-système "${name}"`);
+      }
 
-    // 2) upsert subsystems
-    const subsPayload = Array.from(new Map(rows.map(r => {
-      const key = `${r.system_name}__${r.subsystem_name}`;
-      return [key, {
-        project_id: projectId,
-        system_id:  byName.get(r.system_name)!,
-        name:       r.subsystem_name!,
-        code:       r.subsystem_code || null
-      }];
-    })).values());
+      addLog('🎉 Import terminé');
+    } finally {
+      setRunning(false);
+    }
+  }
 
-    const { error: e2 } = await supabase
-      .from('subsystems')
-      .upsert(subsPayload, { onConflict: 'project_id,system_id,name', ignoreDuplicates: true });
-
-    setLoading(false);
-    if (e2) return setMsg('Erreur sous-systèmes: ' + e2.message);
-    setMsg(`OK – ${systemsList.length} système(s) et ${subsPayload.length} sous‑système(s) mis à jour.`);
+  if (!projectId) {
+    return (
+      <div className="max-w-3xl mx-auto py-10">
+        <h1 className="text-2xl font-semibold mb-4">Import Excel</h1>
+        <p className="mb-4">Choisissez un projet :</p>
+        <ul className="space-y-2">
+          {projects.map(p => (
+            <li key={p.id} className="flex items-center justify-between border border-slate-700 rounded p-3">
+              <span>{p.name}</span>
+              <button
+                onClick={() => router.replace(`/import?project=${p.id}`)}
+                className="px-3 py-1 rounded bg-sky-600 hover:bg-sky-500">Ouvrir</button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
   }
 
   return (
-    <main className="max-w-4xl mx-auto py-10 space-y-6">
-      <h1 className="text-3xl font-bold">Import Systèmes / Sous‑systèmes</h1>
+    <div className="max-w-3xl mx-auto py-10">
+      <h1 className="text-2xl font-semibold mb-2">Import Excel</h1>
+      <p className="text-slate-300 mb-6">Projet : <code>{projectId}</code></p>
 
-      <label className="block">
-        <span className="text-sm text-slate-400">Projet</span>
-        <select
-          className="mt-1 w-full border rounded px-3 py-2 bg-white/90 text-black"
-          value={projectId} onChange={e=>setProjectId(e.target.value)}
-        >
-          <option value="">— Sélectionner —</option>
-          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-      </label>
+      <div className="mb-6 border border-slate-700 rounded p-4">
+        <p className="mb-2 text-sm text-slate-300">
+          Colonnes attendues : <code>system_code</code>, <code>system_name</code>, <code>subsystem_code</code>, <code>subsystem_name</code>.
+        </p>
+        <input type="file" accept=".xlsx,.xls" onChange={onFile}
+               className="block w-full text-sm file:mr-4 file:py-2 file:px-3 file:rounded file:border-0 file:bg-sky-600 file:text-white" />
+      </div>
 
-      <label className="inline-block px-3 py-2 border rounded cursor-pointer">
-        Choisir un fichier Excel
-        <input type="file" className="hidden" accept=".xlsx,.xls"
-               onChange={(e)=> e.target.files && read(e.target.files[0])}/>
-      </label>
+      <div className="mb-6 flex gap-2">
+        <button onClick={runImport} disabled={running || rows.length===0}
+                className="px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50">
+          {running ? 'Import…' : 'Importer'}
+        </button>
+        <span className="text-slate-400 text-sm self-center">
+          {rows.length ? `${rows.length} lignes prêtes` : 'Aucun fichier chargé'}
+        </span>
+      </div>
 
-      {!!rows.length && (
-        <>
-          <button
-            onClick={importNow}
-            disabled={loading}
-            className="px-4 py-2 border rounded bg-cyan-600 hover:bg-cyan-700 text-white"
-          >
-            {loading ? 'Import…' : 'Importer'}
-          </button>
-
-          <details className="mt-3">
-            <summary className="cursor-pointer">Voir les 10 premières lignes</summary>
-            <pre className="text-xs bg-slate-900/40 p-2 rounded mt-2 overflow-auto">
-{JSON.stringify(rows.slice(0,10), null, 2)}
-            </pre>
-          </details>
-        </>
-      )}
-
-      {msg && <p className="mt-3">{msg}</p>}
-    </main>
+      <pre className="bg-slate-900 p-3 rounded text-sm whitespace-pre-wrap">
+        {log.join('\n')}
+      </pre>
+    </div>
   );
 }
