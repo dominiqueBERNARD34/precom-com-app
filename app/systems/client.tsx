@@ -4,44 +4,28 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import supabase from '@/lib/supabaseClient';
 
-type System = { id: string; name: string; project_id: string };
+type System = { id: string; name: string };
 
-export default function Client() {
-  const params = useSearchParams();
-  const projectId = params.get('project'); // si vous filtrez par projet
-  const [rows, setRows] = useState<System[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function SystemsClient() {
+  const sp = useSearchParams();
+  const project = sp.get('project');
+  const [items, setItems] = useState<System[]>([]);
 
   useEffect(() => {
-    let canceled = false;
+    if (!project) return;
+    supabase.from('systems').select('id,name').eq('project_id', project).order('name')
+      .then(({ data }) => setItems(data ?? []));
+  }, [project]);
 
-    async function run() {
-      setLoading(true);
-      const query = supabase
-        .from('systems')
-        .select('id,name,project_id')
-        .order('name', { ascending: true });
-
-      const { data, error } = await query;
-      if (!canceled) {
-        if (!error) setRows(data ?? []);
-        setLoading(false);
-      }
-    }
-    run();
-    return () => { canceled = true; };
-  }, [projectId]);
+  if (!project) return <p className="text-slate-400">Ajoutez `?project=...` dans l’URL ou passez par la page Projets.</p>;
 
   return (
-    <main className="max-w-4xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-4">Systèmes</h1>
-      {loading ? <p>Chargement…</p> : (
-        <ul className="space-y-2">
-          {rows.map(s => (
-            <li key={s.id} className="border rounded px-3 py-2">{s.name}</li>
-          ))}
-        </ul>
-      )}
-    </main>
+    <div className="max-w-3xl mx-auto py-10">
+      <h1 className="text-3xl font-bold mb-6">Systèmes</h1>
+      <ul className="space-y-2">
+        {items.map(s => <li key={s.id} className="px-3 py-2 rounded bg-white/5">{s.name}</li>)}
+        {items.length === 0 && <li className="text-slate-400">Aucun système pour ce projet.</li>}
+      </ul>
+    </div>
   );
 }
