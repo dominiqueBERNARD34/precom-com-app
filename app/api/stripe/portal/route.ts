@@ -1,18 +1,13 @@
-// app/api/stripe/portal/route.ts
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { stripe } from '@/lib/stripe';
 
-export async function POST() {
-  const supabase = createServerComponentClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error:'Non authentifié' }, { status: 401 });
+export const runtime = 'nodejs';
 
-  const { data: profile } = await supabase.from('profiles').select('stripe_customer_id').eq('id', user.id).single();
-  const portal = await stripe.billingPortal.sessions.create({
-    customer: profile!.stripe_customer_id!,
-    return_url: `${process.env.APP_URL}/dashboard`
-  });
-  return NextResponse.json({ url: portal.url });
+export async function POST() {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return NextResponse.json({ ok: true, skipped: true }, { status: 200 });
+  }
+
+  // TODO: code du portal Stripe (quand on activera les paiements)
+  return NextResponse.json({ ok: true }, { status: 200 });
 }
