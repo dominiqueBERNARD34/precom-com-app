@@ -1,13 +1,13 @@
-import { Suspense } from 'react';
-import ProjectsClient from './Client';
+// app/projects/page.tsx
+import Client from './Client';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
-export default function Page() {
+export default function ProjectsPage() {
   return (
-    <Suspense fallback={<div className="py-12 text-center">Chargement…</div>}>
-      <ProjectsClient />
-    </Suspense>
+    <div className="max-w-5xl mx-auto px-6 py-10">
+      <h1 className="text-3xl font-semibold mb-6">Projets</h1>
+      <Client />
+    </div>
   );
 }
