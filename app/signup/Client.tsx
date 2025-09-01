@@ -1,61 +1,35 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useState } from 'react';
 import supabase from '@/lib/supabaseClient';
 
-export default function SignupClient() {
-  const params = useSearchParams();
-  const plan = params.get('plan') ?? 'free';
+type System = { id: string; name: string };
 
-  const [email, setEmail] = useState('');
-  const [pwd, setPwd] = useState('');
-  const [msg, setMsg] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+export default function SystemsClient() {
+  const sp = useSearchParams();
+  const project = sp.get('project');
+  const [items, setItems] = useState<System[]>([]);
 
-  async function onSignup(e: React.FormEvent) {
-    e.preventDefault();
-    setMsg(null);
-    setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password: pwd,
-      options: { data: { plan } },
-    });
-    setLoading(false);
-    setMsg(error ? `Erreur: ${error.message}` : 'Email d’inscription envoyé. Vérifiez votre boîte mail.');
-  }
+  useEffect(() => {
+    if (!project) return;
+    supabase
+      .from('systems')
+      .select('id,name')
+      .eq('project_id', project)
+      .order('name')
+      .then(({ data }) => setItems(data ?? []));
+  }, [project]);
+
+  if (!project) return <p className="text-slate-400">Ajoutez `?project=...` dans l’URL ou passez par la page Projets.</p>;
 
   return (
-    <div className="max-w-xl mx-auto py-12">
-      <h1 className="text-4xl font-extrabold tracking-tight">Inscription</h1>
-      <p className="mt-2">Plan sélectionné : <b>{plan}</b></p>
-
-      <form onSubmit={onSignup} className="mt-8 space-y-4">
-        <input
-          type="email"
-          required
-          placeholder="Email"
-          className="w-full border rounded px-3 py-2 bg-white/90 text-black"
-          value={email} onChange={e=>setEmail(e.target.value)}
-        />
-        <input
-          type="password"
-          required
-          placeholder="Mot de passe"
-          className="w-full border rounded px-3 py-2 bg-white/90 text-black"
-          value={pwd} onChange={e=>setPwd(e.target.value)}
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          className="px-4 py-2 rounded bg-cyan-600 hover:bg-cyan-700 text-white"
-        >
-          {loading ? 'Envoi...' : 'Créer mon compte'}
-        </button>
-      </form>
-
-      {msg && <p className="mt-4">{msg}</p>}
+    <div className="max-w-3xl mx-auto py-10">
+      <h1 className="text-3xl font-bold mb-6">Systèmes</h1>
+      <ul className="space-y-2">
+        {items.map(s => <li key={s.id} className="px-3 py-2 rounded bg-white/5">{s.name}</li>)}
+        {items.length === 0 && <li className="text-slate-400">Aucun système pour ce projet.</li>}
+      </ul>
     </div>
   );
 }
