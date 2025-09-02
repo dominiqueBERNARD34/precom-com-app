@@ -3,25 +3,23 @@ import { Suspense } from 'react';
 import Client from './Client';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-export default function Page({
-  searchParams,
-}: {
-  searchParams: { plan?: string };
-}) {
-  const plan = searchParams?.plan ?? 'free';
+type Props = { searchParams?: { plan?: string } };
 
+export default function Page({ searchParams }: Props) {
+  const plan = (searchParams?.plan ?? 'free').toLowerCase();
   return (
-    <main className="mx-auto max-w-5xl px-6 py-12 text-white">
-      <h1 className="mb-2 text-3xl font-bold">Inscrivez‑vous à PRECOM‑COM</h1>
-      <p className="mb-8 text-white/70">
-        Plan sélectionné&nbsp;: <span className="text-teal-300">{plan}</span>
-      </p>
+    <main className="min-h-[calc(100vh-64px)] bg-gradient-to-b from-[#0B1728] to-[#0A1422]">
+      <div className="mx-auto max-w-5xl px-6 py-10">
+        <h1 className="text-4xl sm:text-5xl font-extrabold text-white">
+          Inscrivez‑vous à <span className="text-brand">PRECOM‑COM</span>
+        </h1>
 
-      {/* Le client ouvre la modale automatiquement si non connecté */}
-      <Suspense>
-        <Client plan={plan} />
-      </Suspense>
+        <Suspense fallback={null}>
+          <Client initialPlan={plan} />
+        </Suspense>
+      </div>
     </main>
   );
 }
