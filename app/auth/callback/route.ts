@@ -1,39 +1,31 @@
-// app/auth/callback/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient, type CookieMethodsServer } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
 
-export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/';
-
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const next = url.searchParams.get('next') || '/projects';
   const cookieStore = cookies();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      // ⬇️ Nouvelle API cookies pour @supabase/ssr
       cookies: {
-        getAll() {
-          // renvoie tous les cookies sous forme [{ name, value }, ...]
-          return cookieStore.getAll();
+        get(name) {
+          return cookieStore.get(name)?.value;
         },
-        setAll(cookiesToSet) {
-          // applique tous les cookies de session Supabase
-          cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set({ name, value, ...options });
-          });
+        set(name, value, options) {
+          cookieStore.set({ name, value, ...options });
         },
-      },
-    }
+        remove(name, options) {
+          cookieStore.set({ name, value: '', ...options, maxAge: 0 });
+        },
+      } as CookieMethodsServer,
+    },
   );
 
-  if (code) {
-    // échange le code Supabase contre une session et écrit les cookies
-    await supabase.auth.exchangeCodeForSession(code);
-  }
-
-  return NextResponse.redirect(new URL(next, origin));
+  // Échange le code OAuth / magic-link contre une session
+  await supabase.auth.exchangeCodeForSession();
+  return NextResponse.redirect(new URL(next, url.origin));
 }
