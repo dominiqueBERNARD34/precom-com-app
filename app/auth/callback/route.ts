@@ -6,10 +6,8 @@ import { createServerClient } from '@supabase/ssr';
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
-
   const cookieStore = cookies();
 
-  // Crée le client SSR avec les méthodes cookies attendues par @supabase/ssr
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -18,10 +16,11 @@ export async function GET(request: Request) {
         // renvoie la valeur (string) d'un cookie
         get: (name: string) => cookieStore.get(name)?.value,
 
-        // renvoie toutes les occurrences d’un cookie (signature récente de @supabase/ssr)
-        getAll: (name: string) => cookieStore.getAll(name),
+        // IMPORTANT : doit accepter 0 ou 1 argument
+        getAll: (name?: string) =>
+          name ? cookieStore.getAll(name) : cookieStore.getAll(),
 
-        // set / remove doivent utiliser cookieStore.set
+        // set / remove utilisent cookieStore.set
         set: (name: string, value: string, options: any) =>
           cookieStore.set({ name, value, ...options }),
 
@@ -32,10 +31,8 @@ export async function GET(request: Request) {
   );
 
   if (code) {
-    // échange le code OAuth contre une session
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  // Redirection après callback (à ajuster si besoin)
   return NextResponse.redirect(`${url.origin}/projects?onboard=1`);
 }
