@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -16,19 +16,24 @@ export async function GET(request: Request) {
         // Lecture de tous les cookies (forme attendue par @supabase/ssr)
         getAll: () => cookieStore.getAll(),
 
-        // Écriture / suppression via cookieStore.set
-        set: (name: string, value: string, options: any) =>
-          cookieStore.set({ name, value, ...options }),
-
-        remove: (name: string, options: any) =>
-          cookieStore.set({ name, value: '', ...options, maxAge: 0 }),
+        // Écriture/suppression sous forme de "batch"
+        // (on applique chaque set fourni par Supabase)
+        setAll: (
+          cookiesToSet: { name: string; value: string; options: CookieOptions }[]
+        ) => {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set({ name, value, ...options });
+          });
+        },
       },
     }
   );
 
+  // Échange le code OAuth/magic-link contre une session
   if (code) {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
+  // Redirige vers l’onboarding projets
   return NextResponse.redirect(`${url.origin}/projects?onboard=1`);
 }
