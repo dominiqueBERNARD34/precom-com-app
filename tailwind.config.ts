@@ -1,24 +1,27 @@
-// tailwind.config.ts
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
-  content: [
-    './app/**/*.{ts,tsx,mdx}',
-    './components/**/*.{ts,tsx}',
-    './pages/**/*.{ts,tsx}',   // si vous avez encore /pages
-  ],
+  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        // Turquoise PRECOM‑COM
-        brand: '#05C6D1',
-      },
-    },
+        primary: {
+          DEFAULT: '#00c2ff',
+          50:  '#e6f8ff',
+          100: '#ccf0ff',
+          200: '#99e1ff',
+          300: '#66d2ff',
+          400: '#33c3ff',
+          500: '#00c2ff',
+          600: '#00a8e5',
+          700: '#0089bd',
+          800: '#006c95',
+          900: '#004e6c'
+        }
+      }
+    }
   },
-  plugins: [
-    // Optionnel : formulaires plus jolis
-    // require('@tailwindcss/forms'),
-  ],
+  plugins: []
 };
 
 export default config;
