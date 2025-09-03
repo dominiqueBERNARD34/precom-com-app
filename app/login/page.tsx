@@ -1,31 +1,61 @@
-// app/login/page.tsx
-'use client';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { FormEvent, useState } from 'react';
-import { useRouter } from 'next/navigation';
+'use client'
+import { useState } from 'react'
+import { supabase } from '@/lib/supabaseClient'
 
 export default function LoginPage() {
-  const supabase = createClientComponentClient();
-  const router = useRouter();
-  const [email,setEmail] = useState(''); const [password,setPassword]=useState('');
-  const [msg,setMsg] = useState<string>();
+  const [email, setEmail] = useState('')
+  const [msg, setMsg] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
-  async function onSubmit(e:FormEvent) {
-    e.preventDefault();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return setMsg(error.message);
-    router.replace('/dashboard');
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const redirectTo = `${origin}/auth/callback`
+
+  const signInWithGoogle = async () => {
+    setBusy(true); setMsg(null)
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo,                             // ← retour chez toi après OAuth
+        queryParams: { access_type: 'offline', prompt: 'consent' } // refresh_token
+      }
+    })
+    if (error) { setMsg(`Google: ${error.message}`); setBusy(false) }
+  }
+
+  const signInWithEmail = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setBusy(true); setMsg(null)
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: redirectTo }   // ← retour après clic sur le lien reçu
+    })
+    setBusy(false)
+    setMsg(error ? `Email: ${error.message}` : `Lien envoyé à ${email}.`)
   }
 
   return (
-    <main className="p-8 max-w-md mx-auto">
-      <h1 className="text-xl font-bold">Connexion</h1>
-      <form onSubmit={onSubmit} className="mt-6 space-y-3">
-        <input className="border rounded w-full p-2" placeholder="Email" type="email" value={email} onChange={e=>setEmail(e.target.value)} required />
-        <input className="border rounded w-full p-2" placeholder="Mot de passe" type="password" value={password} onChange={e=>setPassword(e.target.value)} required />
-        <button className="px-4 py-2 border rounded">Se connecter</button>
+    <div style={{ maxWidth: 480, margin: '24px auto' }}>
+      <h1>Connexion</h1>
+
+      <button onClick={signInWithGoogle} disabled={busy}
+              style={{ padding: '8px 12px', marginBottom: 12 }}>
+        Se connecter avec Google
+      </button>
+
+      <form onSubmit={signInWithEmail}
+            style={{ display:'grid', gap:8, border:'1px solid #eee', padding:12, borderRadius:8 }}>
+        <label>
+          Email
+          <input type="email" required value={email}
+                 onChange={e=>setEmail(e.target.value)}
+                 style={{ width:'100%', padding:8, marginTop:4 }} />
+        </label>
+        <button type="submit" disabled={busy} style={{ padding:'8px 12px' }}>
+          Recevoir un lien magique
+        </button>
       </form>
-      {msg && <p className="mt-4 text-sm">{msg}</p>}
-    </main>
-  );
+
+      {msg && <p style={{ marginTop: 12 }}>{msg}</p>}
+    </div>
+  )
 }
