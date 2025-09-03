@@ -1,44 +1,60 @@
 'use client';
 
 import { useState } from 'react';
-import { supabaseBrowser } from '@/lib/supabaseBrowser';
-import { getBaseUrl } from '@/lib/url';
+import { createClient } from '@supabase/supabase-js';
 
-export default function SignupClient() {
-  const supabase = supabaseBrowser();
+// Client Supabase côté navigateur
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+export default function Client() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const origin = getBaseUrl(); // ← construit https://precom-com.com en prod
-
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${origin}/auth/callback`, // ← INDISPENSABLE
-      },
-    });
-
-    if (error) {
-      alert(error.message);
-    } else {
-      alert('Vérifiez votre e‑mail pour confirmer votre compte.');
+  async function signInWithGoogle() {
+    try {
+      setBusy(true);
+      setMessage(null);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo:
+            typeof window !== 'undefined'
+              ? `${window.location.origin}/auth/callback`
+              : undefined,
+        },
+      });
+      if (error) setMessage(error.message);
+    } finally {
+      setBusy(false);
     }
   }
 
-  async function signInWithGoogle() {
-    const origin = getBaseUrl();
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${origin}/auth/callback` }, // idem pour Google
-    });
+  async function handleSignup(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    try {
+      setBusy(true);
+      setMessage(null);
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo:
+            typeof window !== 'undefined'
+              ? `${window.location.origin}/auth/callback`
+              : undefined,
+        },
+      });
+      if (error) setMessage(error.message);
+      else setMessage('Vérifiez votre boîte mail pour confirmer votre inscription.');
+    } finally {
+      setBusy(false);
+    }
   }
-
-  // …votre JSX (bouton Google => signInWithGoogle, formulaire => onSubmit)
-}
-
 
   return (
     <>
@@ -48,7 +64,9 @@ export default function SignupClient() {
         className="mb-5 inline-flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-medium hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
       >
         {/* simple G */}
-        <span className="inline-grid size-5 place-items-center rounded bg-white text-slate-900">G</span>
+        <span className="inline-grid size-5 place-items-center rounded bg-white text-slate-900">
+          G
+        </span>
         Continuer avec Google
       </button>
 
