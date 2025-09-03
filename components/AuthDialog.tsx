@@ -1,21 +1,40 @@
+// components/AuthDialog.tsx
 'use client';
 
 import * as React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabaseBrowser } from '@/lib/supabaseBrowser';
+import { supabaseBrowser } from '@/lib/supabaseBrowser'; // <-- adapte ce chemin si besoin
 
 type Mode = 'signup' | 'signin';
+type Plan = 'free' | 'starter' | 'growth' | 'business' | 'pro';
+
 export default function AuthDialog({ mode = 'signup' }: { mode?: Mode }) {
   const router = useRouter();
   const search = useSearchParams();
-  const plan = (search.get('plan') || 'free') as 'free'|'starter'|'growth'|'business'|'pro';
+
+  // Valide proprement le plan reçu en query
+  const planParam = (search.get('plan') || 'free').toLowerCase();
+  const plan: Plan = (['free', 'starter', 'growth', 'business', 'pro'].includes(planParam)
+    ? planParam
+    : 'free') as Plan;
 
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [loading, setLoading] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
 
-  const supabase = supabaseBrowser;
+  // Instancie le client Supabase (très important : appeler la factory)
+  const supabase = React.useMemo(() => supabaseBrowser(), []);
+
+  // URL de retour standardisée
+  const callbackUrl = React.useMemo(
+    () => `${window.location.origin}/auth/callback?plan=${plan}`,
+    [plan]
+  );
+
+  function normalize(s: string) {
+    return s.trim();
+  }
 
   async function withGoogle() {
     setMsg(null);
@@ -24,12 +43,13 @@ export default function AuthDialog({ mode = 'signup' }: { mode?: Mode }) {
       await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?plan=${plan}`,
+          redirectTo: callbackUrl,
           queryParams: { access_type: 'offline', prompt: 'consent' }
         }
       });
+      // Redirection prise en charge par Supabase/Google
     } catch (e: any) {
-      setMsg(e?.message ?? 'Échec Google');
+      setMsg(e?.message ?? 'Échec de la connexion avec Google.');
       setLoading(false);
     }
   }
@@ -37,26 +57,56 @@ export default function AuthDialog({ mode = 'signup' }: { mode?: Mode }) {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
-    setLoading(true);
 
+    const mail = normalize(email);
+    const pass = password;
+
+    if (!mail) {
+      setMsg('Veuillez saisir une adresse e‑mail.');
+      return;
+    }
+    if (mode === 'signup' && (!pass || pass.length < 6)) {
+      setMsg('Le mot de passe doit contenir au moins 6 caractères.');
+      return;
+    }
+    if (mode === 'signin' && !pass) {
+      setMsg('Veuillez saisir votre mot de passe.');
+      return;
+    }
+
+    setLoading(true);
     try {
       if (mode === 'signin') {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({ email: mail, password: pass });
         if (error) throw error;
+        // Si la connexion réussit, on enchaîne sur le callback
         router.replace(`/auth/callback?plan=${plan}`);
       } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback?plan=${plan}`
-          }
+        const { data, error } = await supabase.auth.signUp({
+          email: mail,
+          password: pass,
+          options: { emailRedirectTo: callbackUrl }
         });
         if (error) throw error;
-        setMsg('Vérifiez votre e‑mail pour confirmer votre compte.');
+
+        // Selon les policies Supabase :
+        // - si "Confirm email" est désactivé, une session peut déjà exister -> on route.
+        // - sinon, on demande la confirmation e-mail.
+        if (data?.session) {
+          router.replace(`/auth/callback?plan=${plan}`);
+        } else {
+          setMsg('Vérifiez votre e‑mail pour confirmer votre compte (lien d’activation envoyé).');
+        }
       }
     } catch (e: any) {
-      setMsg(e?.message ?? "Erreur d'authentification");
+      // Messages d’erreurs “propres”
+      const message =
+        e?.message?.includes('Invalid login credentials')
+          ? 'Identifiants invalides.'
+          : e?.message?.includes('User already registered')
+          ? 'Un compte existe déjà avec cet e‑mail.'
+          : e?.message ?? "Erreur d'authentification.";
+      setMsg(message);
     } finally {
       setLoading(false);
     }
@@ -73,7 +123,7 @@ export default function AuthDialog({ mode = 'signup' }: { mode?: Mode }) {
       <button
         onClick={withGoogle}
         disabled={loading}
-        className="mb-4 inline-flex w-full items-center justify-center gap-3 rounded-xl border border-white/15 bg-white px-4 py-3 font-medium text-slate-900 shadow hover:bg-white/90"
+        className="mb-4 inline-flex w-full items-center justify-center gap-3 rounded-xl border border-white/15 bg-white px-4 py-3 font-medium text-slate-900 shadow hover:bg-white/90 disabled:cursor-not-allowed"
       >
         <span>Continuer avec Google</span>
       </button>
@@ -83,20 +133,27 @@ export default function AuthDialog({ mode = 'signup' }: { mode?: Mode }) {
       <form onSubmit={onSubmit} className="space-y-3">
         <input
           type="email"
+          name="email"
           placeholder="votre@email.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-white placeholder-white/40 outline-none focus:border-cyan-400/50"
+          className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-white placeholder-white/40 outline-none focus:border-cyan-400/50 disabled:opacity-60"
           autoComplete="email"
+          disabled={loading}
+          required
         />
         <input
           type="password"
+          name="password"
           placeholder={mode === 'signup' ? 'Au moins 6 caractères' : 'Mot de passe'}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-white placeholder-white/40 outline-none focus:border-cyan-400/50"
+          className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-white placeholder-white/40 outline-none focus:border-cyan-400/50 disabled:opacity-60"
           autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+          disabled={loading}
+          required
         />
+
         <button
           type="submit"
           disabled={loading}
@@ -105,6 +162,12 @@ export default function AuthDialog({ mode = 'signup' }: { mode?: Mode }) {
           {loading ? 'En cours…' : mode === 'signup' ? 'Créer mon compte' : 'Se connecter'}
         </button>
       </form>
+
+      {/* Astuce: si tu veux un lien "Mot de passe oublié", ajoute la route /auth/reset et décommente :
+      <div className="mt-3 text-center text-sm text-white/70">
+        <a className="underline hover:text-white" href="/auth/reset">Mot de passe oublié ?</a>
+      </div>
+      */}
     </div>
   );
 }
