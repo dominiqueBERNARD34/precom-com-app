@@ -4,3 +4,5 @@
 
 :root { color-scheme: dark; }
 body { @apply bg-slate-950 text-slate-100; }
+html, body { background:#f8fafc; color:#0f172a; }
+
