@@ -12,10 +12,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div style={{ fontWeight:700 }}>precom-com</div>
 
           <nav style={{ display:'flex', gap:16 }}>
-            <a href="/"        style={{ color:'#fff', textDecoration:'none' }}>Accueil</a>
-            <a href="/systems" style={{ color:'#fff', textDecoration:'none' }}>Systèmes</a>
-            <a href="/tab-lab" style={{ color:'#fff', textDecoration:'none' }}>Import</a>
+             <a href="/"          style={{ color:'#fff', textDecoration:'none' }}>Accueil</a>
+             <a href="/systems"   style={{ color:'#fff', textDecoration:'none' }}>Systèmes</a>
+             <a href="/tab-lab"   style={{ color:'#fff', textDecoration:'none' }}>Import</a>
+             <a href="/pricing"   style={{ color:'#fff', textDecoration:'none' }}>Tarifs</a>
           </nav>
+
 
           {/* Actions à droite : SEULEMENT "Se connecter" */}
           <div style={{ display:'flex', gap:12 }}>
