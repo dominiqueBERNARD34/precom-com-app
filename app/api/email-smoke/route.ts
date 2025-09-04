@@ -1,23 +1,41 @@
-// app/api/email-smoke/route.ts
-import { NextResponse } from 'next/server'
-import { sendMail } from '@/app/lib/mailer'
+import { NextResponse } from 'next/server';
 
-// Resend marche bien en Node.js runtime ; on le force par sécurité
-export const runtime = 'nodejs'
-
-export async function GET(req: Request) {
-  const url = new URL(req.url)
-  const to = url.searchParams.get('to')
-  if (!to) return NextResponse.json({ error: 'Paramètre ?to= manquant' }, { status: 400 })
-
-  await sendMail({ to, subject: 'Smoke test', text: 'Email OK ✅' })
-  return NextResponse.json({ ok: true })
-}
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic'; // évite toute tentative de pré-render
 
 export async function POST(req: Request) {
-  const { to, subject, text, html } = await req.json()
-  if (!to) return NextResponse.json({ error: 'Champ to requis' }, { status: 400 })
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    // Ne casse pas le build: renvoie une 500 propre à l'exécution
+    return NextResponse.json(
+      { ok: false, error: 'RESEND_API_KEY manquante côté serveur' },
+      { status: 500 }
+    );
+  }
 
-  await sendMail({ to, subject: subject || 'Smoke test', text, html })
-  return NextResponse.json({ ok: true })
+  // Import dynamique pour éviter tout souci au bundle
+  const { Resend } = await import('resend');
+  const resend = new Resend(key);
+
+  try {
+    const body = await req.json().catch(() => ({} as any));
+    const to = body?.to ?? 'you@example.com';
+
+    const { data, error } = await resend.emails.send({
+      from: 'Precom-Com <onboarding@resend.dev>',
+      to,
+      subject: 'Smoke test',
+      html: '<p>OK ✅ – email envoyé par precom-com</p>',
+    });
+
+    if (error) {
+      return NextResponse.json({ ok: false, error }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, data });
+  } catch (err: any) {
+    return NextResponse.json(
+      { ok: false, error: err?.message ?? String(err) },
+      { status: 500 }
+    );
+  }
 }
