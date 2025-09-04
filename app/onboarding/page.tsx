@@ -1,50 +1,58 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
+import { useMemo, useState } from 'react'
 
-export default function Onboarding() {
+type Plan = 'growth' | 'business'
+
+export default function OnboardingPage() {
   const sp = useSearchParams()
-  const plan = sp.get('plan') || 'pro'
-  const [email, setEmail] = useState<string | null>(null)
 
-  useEffect(()=>{
-    supabase.auth.getUser().then(({data})=>{
-      setEmail(data.user?.email ?? null)
-    })
-  },[])
+  // Récupération + sécurisation de la valeur ?plan=
+  const initialPlan: Plan = useMemo(() => {
+    const p = (sp.get('plan') || '').toLowerCase()
+    return p === 'business' ? 'business' : 'growth'
+  }, [sp])
+
+  const [plan, setPlan] = useState<Plan>(initialPlan)
+
+  const wrap: React.CSSProperties = { maxWidth: 900, margin: '24px auto', padding: 16 }
+  const radio: React.CSSProperties = { display: 'flex', gap: 12, margin: '12px 0' }
 
   return (
-    <div style={{
-      display:'grid', placeItems:'center', minHeight:'calc(100dvh - 64px)',
-      background:'radial-gradient(80% 80% at 50% 0%, #0b1220 0%, #0a0f1c 100%)'
-    }}>
-      <div style={{
-        width:'min(720px, 92vw)', background:'#0b1220', border:'1px solid #1f2937',
-        borderRadius:18, padding:24, color:'#e5e7eb', textAlign:'center'
-      }}>
-        <div style={{fontSize:30, fontWeight:900}}>Bienvenue sur PRECOM‑COM</div>
-        <div style={{marginTop:6, color:'#9ca3af'}}>
-          {email ? `Connecté en tant que ${email}` : 'Vérifiez votre e‑mail si vous venez de créer un compte.'}
-        </div>
-        <div style={{marginTop:12}}>
-          Plan sélectionné : <b style={{textTransform:'capitalize'}}>{plan}</b>
-        </div>
-        <div style={{marginTop:22, display:'flex', gap:10, justifyContent:'center'}}>
-          <a href="/systems" style={{
-            padding:'10px 14px', borderRadius:10, background:'#22c55e', color:'#0b1220',
-            textDecoration:'none', fontWeight:800
-          }}>
-            Ouvrir l’arborescence
-          </a>
-          <a href="/tab-lab" style={{
-            padding:'10px 14px', borderRadius:10, border:'1px solid #334155',
-            color:'#e5e7eb', textDecoration:'none'
-          }}>
-            Importer des repères
-          </a>
-        </div>
+    <div style={wrap}>
+      <h1 style={{ fontSize: 26, marginBottom: 8 }}>Onboarding</h1>
+      <p style={{ color: '#64748b', marginTop: 0 }}>
+        Plan pré‑sélectionné depuis l’URL : <b>{plan}</b>
+      </p>
+
+      <div style={radio}>
+        <label>
+          <input
+            type="radio"
+            name="plan"
+            value="growth"
+            checked={plan === 'growth'}
+            onChange={() => setPlan('growth')}
+          />
+          &nbsp;Growth
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="plan"
+            value="business"
+            checked={plan === 'business'}
+            onChange={() => setPlan('business')}
+          />
+          &nbsp;Business
+        </label>
+      </div>
+
+      {/* Suite de ton flux : formulaire, récap, paiement, etc. */}
+      <div style={{ marginTop: 16, padding: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+        <p style={{ margin: 0 }}><b>Étape suivante :</b> ici tu peux afficher les options du plan choisi,
+        pré‑remplir un formulaire ou envoyer vers un checkout.</p>
       </div>
     </div>
   )
