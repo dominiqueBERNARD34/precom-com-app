@@ -1,85 +1,66 @@
+// src/app/signup/page.tsx
 'use client'
-
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
+import { normalizePlan, planBySlug, PlanSlug } from '@/lib/plans'
 
-const PLANS = ['starter', 'growth', 'business'] as const
-type Plan = typeof PLANS[number]
+export const dynamic = 'force-dynamic'  // anti-cache
 
 export default function SignupPage() {
   const sp = useSearchParams()
-  const fromQuery = (sp.get('plan') || '').toLowerCase()
-
-  // normalise et sécurise le plan
-  const initialPlan: Plan = useMemo(() => {
-    const q = PLANS.find(p => p === fromQuery)
-    const stored = (typeof window !== 'undefined'
-      ? (localStorage.getItem('precom:plan') || '').toLowerCase()
-      : '') as Plan
-    return (q ?? (PLANS.find(p => p === stored) as Plan) ?? 'starter')
-  }, [fromQuery])
-
-  const [plan, setPlan] = useState<Plan>(initialPlan)
+  const [plan, setPlan] = useState<PlanSlug>('starter')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [msg, setMsg] = useState<string | null>(null)
+  const [msg, setMsg] = useState<string>('')
 
   useEffect(() => {
-    // mémorise pour conserver le plan si l’utilisateur revient en arrière
-    localStorage.setItem('precom:plan', plan)
-  }, [plan])
+    const q = normalizePlan(sp.get('plan'))
+    let finalPlan = q
+    if (!sp.get('plan')) {
+      try { finalPlan = normalizePlan(sessionStorage.getItem('selected_plan')) } catch {}
+    }
+    setPlan(finalPlan)
+    try { sessionStorage.setItem('selected_plan', finalPlan) } catch {}
+  }, [sp])
 
-  const signUpWithEmail = async () => {
-    setMsg(null)
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
+  async function handleSignup(e: React.FormEvent) {
+    e.preventDefault()
+    setMsg('Envoi…')
+    const { data, error } = await supabase.auth.signUp({
+      email, password,
       options: {
-        // on enregistre le plan choisi dans les métadonnées utilisateur
+        // très utile pour Supabase : où revenir après clic dans l’email
+        emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/` : undefined,
         data: { selected_plan: plan }
       }
     })
-    setMsg(error ? `Erreur: ${error.message}` : 'Compte créé — vérifie tes emails')
+    if (error) { setMsg(`Erreur : ${error.message}`); return }
+    if (!data.user) { setMsg('Inscription initiée.'); return }
+    setMsg('Compte créé — vérifie tes emails.')
   }
 
-  const signInWithGoogle = async () => {
-    // IMPORTANT : on propage aussi le plan dans le retour OAuth
-    const origin = window.location.origin
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${origin}/auth/callback?plan=${plan}` }
-    })
+  async function resend() {
+    const { error } = await supabase.auth.resend({ type: 'signup', email })
+    setMsg(error ? `Erreur renvoi : ${error.message}` : 'Email de confirmation renvoyé.')
   }
 
+  const p = planBySlug[plan]
   return (
-    <div style={{ maxWidth: 420, margin: '24px auto' }}>
-      <h1>Inscrivez‑vous à <b>PRECOM‑COM</b></h1>
+    <div style={{maxWidth:560,margin:'24px auto',padding:16}}>
+      <h1>Inscrivez-vous à PRECOM-COM</h1>
+      <p>Plan sélectionné : <b>{p.name}</b> &nbsp; <Link prefetch={false} href="/pricing">Changer</Link></p>
 
-      <p style={{ marginTop: 8 }}>
-        Plan sélectionné : <b>{plan}</b>{' '}
-        <a href="/pricing" style={{ marginLeft: 8 }}>Changer</a>
-      </p>
+      <form onSubmit={handleSignup} style={{display:'grid',gap:10}}>
+        <input type="email" required placeholder="E‑mail" value={email} onChange={e=>setEmail(e.target.value)} />
+        <input type="password" required placeholder="Mot de passe" value={password} onChange={e=>setPassword(e.target.value)} />
+        <button type="submit">Créer mon compte</button>
+      </form>
 
-      <button onClick={signInWithGoogle} style={{ width:'100%', padding:10 }}>
-        G Continuer avec Google
-      </button>
-
-      <div style={{ textAlign:'center', color:'#64748b', margin: '12px 0' }}>ou</div>
-
-      <label>E‑mail</label>
-      <input value={email} onChange={e=>setEmail(e.target.value)}
-             placeholder="votre@email.com" style={{ width:'100%', padding:8 }} />
-
-      <label style={{ marginTop:8, display:'block' }}>Mot de passe</label>
-      <input type="password" value={password} onChange={e=>setPassword(e.target.value)}
-             placeholder="Au moins 6 caractères" style={{ width:'100%', padding:8 }} />
-
-      <button onClick={signUpWithEmail} style={{ width:'100%', padding:10, marginTop:12 }}>
-        Créer mon compte
-      </button>
-
-      {msg && <p style={{ marginTop:10 }}>{msg}</p>}
+      {!!msg && <p style={{marginTop:8}}>{msg} {msg.includes('vérifie tes emails') && (
+        <button onClick={resend} style={{marginLeft:8}}>Renvoyer l’email</button>
+      )}</p>}
     </div>
   )
 }
