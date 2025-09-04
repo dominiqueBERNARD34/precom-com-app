@@ -1,19 +1,16 @@
-// src/lib/plans.ts
-export type PlanSlug = 'starter' | 'pro' | 'business'
+// Types
+export type PlanSlug = 'starter' | 'pro' | 'business'; // adapte si tu as plus de slugs
 
-export const PLANS = [
-  { slug: 'starter',  name: 'Essai (Starter)', price: 0 },
-  { slug: 'pro',      name: 'Pro',             price: 49 },
-  { slug: 'business', name: 'Business',        price: 199 },
-] as const
+type PlanDef = {
+  slug: PlanSlug;
+  name: string;
+  price: number;
+  priceId?: string; // optionnel pour l’offre gratuite
+};
 
-export const planBySlug: Record<PlanSlug, typeof PLANS[number]> =
-  Object.fromEntries(PLANS.map(p => [p.slug, p])) as any
-
-export function normalizePlan(input?: string | null): PlanSlug {
-  const s = (input ?? '').toLowerCase().trim()
-  if ((['starter','essai','trial','free'] as string[]).includes(s)) return 'starter'
-  if ((['pro','professional'] as string[]).includes(s))             return 'pro'
-  if ((['business','biz','entreprise'] as string[]).includes(s))    return 'business'
-  return (['starter','pro','business'].includes(s) ? s : 'starter') as PlanSlug
-}
+// Dictionnaire "slug -> plan"
+export const PLANS = {
+  starter:  { slug: 'starter',  name: 'Essai (Starter)', price: 0 },
+  pro:      { slug: 'pro',      name: 'Pro',             price: 49,  priceId: process.env.STRIPE_PRICE_PRO },
+  business: { slug: 'business', name: 'Business',        price: 199, priceId: process.env.STRIPE_PRICE_BUSINESS },
+} as const satisfies Record<PlanSlug, PlanDef>;
