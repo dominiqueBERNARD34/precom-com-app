@@ -1,18 +1,19 @@
-// lib/plans.ts
-export type PlanKey = 'free' | 'starter' | 'growth' | 'business' | 'pro';
+// src/lib/plans.ts
+export type PlanSlug = 'starter' | 'pro' | 'business'
 
-export const PLANS: Record<PlanKey, {
-  label: string; priceId?: string; price: string;
-  limits: { max_projects: number; max_systems: number; max_subsystems_per_system: number }
-}> = {
-  free:     { label: 'Gratuit (essai)', price: '0 € / mois',
-              limits: { max_projects: 1,  max_systems: 1,  max_subsystems_per_system: 2 } },
-  starter:  { label: 'Starter',   priceId: process.env.STRIPE_PRICE_STARTER!,  price: '19,99 € / mois',
-              limits: { max_projects: 1,  max_systems: 5,  max_subsystems_per_system: 5 } },
-  growth:   { label: 'Growth',    priceId: process.env.STRIPE_PRICE_GROWTH!,   price: '49,99 € / mois',
-              limits: { max_projects: 2,  max_systems: 10, max_subsystems_per_system: 10 } },
-  business: { label: 'Business',  priceId: process.env.STRIPE_PRICE_BUSINESS!, price: '199,99 € / mois',
-              limits: { max_projects: 3,  max_systems: 20, max_subsystems_per_system: 15 } },
-  pro:      { label: 'Pro',       priceId: process.env.STRIPE_PRICE_PRO!,      price: '999,90 € / mois',
-              limits: { max_projects: 5,  max_systems: 25, max_subsystems_per_system: 25 } },
-};
+export const PLANS = [
+  { slug: 'starter',  name: 'Essai (Starter)', price: 0 },
+  { slug: 'pro',      name: 'Pro',             price: 49 },
+  { slug: 'business', name: 'Business',        price: 199 },
+] as const
+
+export const planBySlug: Record<PlanSlug, typeof PLANS[number]> =
+  Object.fromEntries(PLANS.map(p => [p.slug, p])) as any
+
+export function normalizePlan(input?: string | null): PlanSlug {
+  const s = (input ?? '').toLowerCase().trim()
+  if ((['starter','essai','trial','free'] as string[]).includes(s)) return 'starter'
+  if ((['pro','professional'] as string[]).includes(s))             return 'pro'
+  if ((['business','biz','entreprise'] as string[]).includes(s))    return 'business'
+  return (['starter','pro','business'].includes(s) ? s : 'starter') as PlanSlug
+}
