@@ -1,157 +1,85 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 
-type PlanKey = 'starter' | 'pro' | 'enterprise'
-const PLANS: Record<PlanKey, { label: string }> = {
-  starter:    { label: 'starter' },
-  pro:        { label: 'pro' },
-  enterprise: { label: 'entreprise' }
-}
-
-function normalizePlan(p: string | null): PlanKey {
-  const k = (p ?? '').toLowerCase()
-  if (k === 'starter' || k === 'pro' || k === 'enterprise') return k
-  return 'starter'
-}
+const PLANS = ['starter', 'growth', 'business'] as const
+type Plan = typeof PLANS[number]
 
 export default function SignupPage() {
   const sp = useSearchParams()
-  const [plan, setPlan] = useState<PlanKey>('starter')
+  const fromQuery = (sp.get('plan') || '').toLowerCase()
+
+  // normalise et sécurise le plan
+  const initialPlan: Plan = useMemo(() => {
+    const q = PLANS.find(p => p === fromQuery)
+    const stored = (typeof window !== 'undefined'
+      ? (localStorage.getItem('precom:plan') || '').toLowerCase()
+      : '') as Plan
+    return (q ?? (PLANS.find(p => p === stored) as Plan) ?? 'starter')
+  }, [fromQuery])
+
+  const [plan, setPlan] = useState<Plan>(initialPlan)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
 
-  // ---- Sélection du plan : URL > localStorage > défaut
   useEffect(() => {
-    const fromQuery = sp.get('plan')
-    if (fromQuery) {
-      const p = normalizePlan(fromQuery)
-      setPlan(p)
-      try { localStorage.setItem('selectedPlan', p) } catch {}
-      return
-    }
-    try {
-      const fromLS = localStorage.getItem('selectedPlan') as PlanKey | null
-      if (fromLS && (fromLS in PLANS)) setPlan(fromLS)
-    } catch {}
-  }, [sp])
+    // mémorise pour conserver le plan si l’utilisateur revient en arrière
+    localStorage.setItem('precom:plan', plan)
+  }, [plan])
 
-  async function onGoogle() {
-    setBusy(true); setMsg(null)
-    try {
-      await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?plan=${plan}`,
-          queryParams: { prompt: 'consent' }
-        }
-      })
-    } catch (e: any) {
-      setMsg(e?.message || 'Erreur Google OAuth')
-      setBusy(false)
-    }
+  const signUpWithEmail = async () => {
+    setMsg(null)
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        // on enregistre le plan choisi dans les métadonnées utilisateur
+        data: { selected_plan: plan }
+      }
+    })
+    setMsg(error ? `Erreur: ${error.message}` : 'Compte créé — vérifie tes emails')
   }
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setBusy(true); setMsg(null)
-    try {
-      const { error } = await supabase.auth.signUp({
-        email, password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback?plan=${plan}`,
-          data: { plan } // user_metadata.plan
-        }
-      })
-      if (error) throw error
-      setMsg("Vérifie ta boîte mail pour confirmer ton compte.")
-    } catch (e: any) {
-      setMsg(e?.message || 'Erreur inscription')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  // ---- Styles “fenêtre agréable” (fond clair, carte blanche)
-  const page: React.CSSProperties = {
-    minHeight: '100dvh',
-    display: 'grid',
-    alignItems: 'center',
-    justifyItems: 'center',
-    padding: 16,
-    background: 'linear-gradient(180deg,#f8fafc 0%,#eef2f7 100%)',
-    color: '#0f172a'
-  }
-  const card: React.CSSProperties = {
-    width: 360,
-    background: '#fff',
-    borderRadius: 12,
-    boxShadow: '0 12px 30px rgba(15,23,42,.08)',
-    padding: 20
-  }
-  const input: React.CSSProperties = {
-    width: '100%',
-    border: '1px solid #e5e7eb',
-    borderRadius: 8,
-    padding: '10px 12px'
-  }
-  const button: React.CSSProperties = {
-    width: '100%',
-    border: '1px solid #e5e7eb',
-    borderRadius: 8,
-    padding: '10px 12px',
-    cursor: 'pointer',
-    background: '#0f172a',
-    color: '#fff'
+  const signInWithGoogle = async () => {
+    // IMPORTANT : on propage aussi le plan dans le retour OAuth
+    const origin = window.location.origin
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${origin}/auth/callback?plan=${plan}` }
+    })
   }
 
   return (
-    <div style={page}>
-      <div style={card}>
-        <h1 style={{margin:'0 0 8px'}}>Inscrivez‑vous à <span style={{fontWeight:700}}>PRECOM‑COM</span></h1>
-        <div style={{margin:'6px 0 14px', fontSize:14, color:'#475569'}}>
-          Plan sélectionné&nbsp;: <b>{PLANS[plan].label}</b>
-          <span style={{marginLeft:8}}>
-            <a href="/pricing" style={{color:'#0f172a'}}>Changer</a>
-          </span>
-        </div>
+    <div style={{ maxWidth: 420, margin: '24px auto' }}>
+      <h1>Inscrivez‑vous à <b>PRECOM‑COM</b></h1>
 
-        <button onClick={onGoogle} disabled={busy} style={{...button, background:'#fff', color:'#0f172a'}}>
-          G Continuer avec Google
-        </button>
+      <p style={{ marginTop: 8 }}>
+        Plan sélectionné : <b>{plan}</b>{' '}
+        <a href="/pricing" style={{ marginLeft: 8 }}>Changer</a>
+      </p>
 
-        <div style={{margin:'10px 0', textAlign:'center', color:'#94a3b8', fontSize:12}}>ou</div>
+      <button onClick={signInWithGoogle} style={{ width:'100%', padding:10 }}>
+        G Continuer avec Google
+      </button>
 
-        <form onSubmit={onSubmit} style={{display:'grid', gap:10}}>
-          <label style={{fontSize:14}}>E‑mail</label>
-          <input style={input} type="email" required
-                 placeholder="votre@email.com"
-                 value={email} onChange={e=>setEmail(e.target.value)} />
+      <div style={{ textAlign:'center', color:'#64748b', margin: '12px 0' }}>ou</div>
 
-          <label style={{fontSize:14}}>Mot de passe</label>
-          <input style={input} type="password" required minLength={6}
-                 placeholder="Au moins 6 caractères"
-                 value={password} onChange={e=>setPassword(e.target.value)} />
+      <label>E‑mail</label>
+      <input value={email} onChange={e=>setEmail(e.target.value)}
+             placeholder="votre@email.com" style={{ width:'100%', padding:8 }} />
 
-          <button type="submit" disabled={busy} style={button}>
-            Créer mon compte
-          </button>
-        </form>
+      <label style={{ marginTop:8, display:'block' }}>Mot de passe</label>
+      <input type="password" value={password} onChange={e=>setPassword(e.target.value)}
+             placeholder="Au moins 6 caractères" style={{ width:'100%', padding:8 }} />
 
-        <div style={{marginTop:10, fontSize:14}}>
-          Déjà un compte ? <a href="/login" style={{color:'#0f172a'}}>Se connecter</a>
-        </div>
+      <button onClick={signUpWithEmail} style={{ width:'100%', padding:10, marginTop:12 }}>
+        Créer mon compte
+      </button>
 
-        {msg && (
-          <div style={{marginTop:12, padding:10, background:'#f1f5f9', borderRadius:8, fontSize:14}}>
-            {msg}
-          </div>
-        )}
-      </div>
+      {msg && <p style={{ marginTop:10 }}>{msg}</p>}
     </div>
   )
 }
