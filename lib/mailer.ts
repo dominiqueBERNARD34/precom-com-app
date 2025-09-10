@@ -1,39 +1,49 @@
 // lib/mailer.ts
-import 'server-only'
-import nodemailer, { type Transporter } from 'nodemailer'
+import 'server-only';
+import { Resend } from 'resend';
 
-let transporter: Transporter | null = null
-
-function getTransporter(): Transporter {
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST!,
-      port: Number(process.env.SMTP_PORT ?? 587),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: process.env.SMTP_USER!,
-        pass: process.env.SMTP_PASS!
-      }
-    })
-  }
-  return transporter
-}
+const resend = new Resend(process.env.RESEND_API_KEY || '');
 
 export type MailInput = {
-  to: string
-  subject: string
-  text?: string
-  html?: string
-  from?: string
+  to: string | string[];
+  subject: string;
+  text?: string;
+  html?: string;
+  replyTo?: string;
+  from?: string; // optionnel pour override ponctuel
+};
+
+function stripHtml(s: string) {
+  return s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-export async function sendMail({ to, subject, text, html, from }: MailInput) {
-  const info = await getTransporter().sendMail({
-    from: from ?? process.env.MAIL_FROM!,
-    to,
-    subject,
+export async function sendMail(opts: MailInput) {
+  // Sécurise le "from" (utilise la variable d'env ou la valeur fournie)
+  const from =
+    opts.from ||
+    process.env.EMAIL_FROM ||
+    'Precom <onboarding@resend.dev>';
+
+  // Évite les crashs en build si la clé manque (ex: preview sans secrets)
+  if (!process.env.RESEND_API_KEY) {
+    console.warn('[sendMail] RESEND_API_KEY manquante – envoi ignoré.');
+    return { skipped: true };
+  }
+
+  const text = opts.text || (opts.html ? stripHtml(opts.html).slice(0, 2000) : ' ');
+
+  const { data, error } = await resend.emails.send({
+    from,
+    to: opts.to,
+    subject: opts.subject,
     text,
-    html
-  })
-  return info.messageId
+    ...(opts.html ? { html: opts.html } : {}),
+    ...(opts.replyTo ? { reply_to: opts.replyTo } : {})
+  });
+
+  if (error) {
+    console.error('[sendMail] Resend error:', error);
+    throw error;
+  }
+  return data;
 }
