@@ -1,20 +1,23 @@
-export type PlanSlug = 'basic' | 'pro' | 'enterprise'
+// src/lib/plans.ts
 
-export function normalizePlan(input: string | { slug?: string } | null | undefined): PlanSlug {
-  const raw = typeof input === 'string' ? input : (input?.slug ?? '')
-  const s = raw.toLowerCase()
-  if (s === 'pro' || s === 'professional') return 'pro'
-  if (s === 'enterprise' || s === 'ent') return 'enterprise'
-  return 'basic'
+export type PlanId = 'free' | 'starter' | 'growth' | 'business' | 'pro'
+
+export type Plan = {
+  id: PlanId
+  name: string
+  // Nom de la variable d'env qui contient le Price ID Stripe (côté serveur)
+  priceEnv?: string
+  highlight?: string
 }
 
-export function planBySlug(slug: string) {
-  const s = normalizePlan(slug)
-  return {
-    slug: s,
-    name: s === 'basic' ? 'Basic' : s === 'pro' ? 'Pro' : 'Enterprise',
-  }
-}
+export const PLANS: Plan[] = [
+  { id: 'free',      name: 'Free' },
+  { id: 'starter',   name: 'Starter',   priceEnv: 'STRIPE_PRICE_STARTER' },
+  { id: 'growth',    name: 'Growth',    priceEnv: 'STRIPE_PRICE_GROWTH' },
+  { id: 'business',  name: 'Business',  priceEnv: 'STRIPE_PRICE_BUSINESS' },
+  { id: 'pro',       name: 'Pro',       priceEnv: 'STRIPE_PRICE_PRO' },
+]
 
-// Optionnel : export par défaut pratique
-export default { normalizePlan, planBySlug }
+// Pour être tolérant avec d’anciens imports :
+export default PLANS
+export const plans = PLANS
