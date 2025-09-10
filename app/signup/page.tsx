@@ -1,66 +1,49 @@
-// src/app/signup/page.tsx
-'use client'
-import { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
-import Link from 'next/link'
-import { supabase } from '@/lib/supabaseClient'
-import { normalizePlan, planBySlug, PlanSlug } from '@/lib/plans'
+// /app/signup/page.tsx  (SERVER)
+import { Suspense } from 'react'
+import NextDynamic from 'next/dynamic'
+import { planBySlug } from '@/lib/plans'
 
-export const dynamic = 'force-dynamic'  // anti-cache
+// On charge le composant client sans SSR pour éviter les erreurs de prerender
+const AuthDialog = NextDynamic(() => import('@/components/AuthDialog'), { ssr: false })
 
-export default function SignupPage() {
-  const sp = useSearchParams()
-  const [plan, setPlan] = useState<PlanSlug>('starter')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [msg, setMsg] = useState<string>('')
+// Indique à Next que la page est dynamique (pas de pré-rendu statique)
+export const dynamic = 'force-dynamic'
 
-  useEffect(() => {
-    const q = normalizePlan(sp.get('plan'))
-    let finalPlan = q
-    if (!sp.get('plan')) {
-      try { finalPlan = normalizePlan(sessionStorage.getItem('selected_plan')) } catch {}
-    }
-    setPlan(finalPlan)
-    try { sessionStorage.setItem('selected_plan', finalPlan) } catch {}
-  }, [sp])
+export default function Page({ searchParams }: { searchParams: { plan?: string } }) {
+  // ✅ Appel de la fonction (et pas indexation) :
+  const p = planBySlug(searchParams.plan)
 
-  async function handleSignup(e: React.FormEvent) {
-    e.preventDefault()
-    setMsg('Envoi…')
-    const { data, error } = await supabase.auth.signUp({
-      email, password,
-      options: {
-        // très utile pour Supabase : où revenir après clic dans l’email
-        emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/` : undefined,
-        data: { selected_plan: plan }
-      }
-    })
-    if (error) { setMsg(`Erreur : ${error.message}`); return }
-    if (!data.user) { setMsg('Inscription initiée.'); return }
-    setMsg('Compte créé — vérifie tes emails.')
-  }
-
-  async function resend() {
-    const { error } = await supabase.auth.resend({ type: 'signup', email })
-    setMsg(error ? `Erreur renvoi : ${error.message}` : 'Email de confirmation renvoyé.')
-  }
-
-  const p = planBySlug[plan]
   return (
-    <div style={{maxWidth:560,margin:'24px auto',padding:16}}>
-      <h1>Inscrivez-vous à PRECOM-COM</h1>
-      <p>Plan sélectionné : <b>{p.name}</b> &nbsp; <Link prefetch={false} href="/pricing">Changer</Link></p>
+    <main
+      style={{
+        minHeight: '100vh',
+        display: 'grid',
+        placeItems: 'center',
+        background: '#0b1220',
+        color: '#e2e8f0',
+        padding: 16,
+      }}
+    >
+      <div
+        style={{
+          width: 380,
+          background: '#0f172a',
+          border: '1px solid #1e293b',
+          borderRadius: 12,
+          padding: 20,
+        }}
+      >
+        <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>
+          Inscription — {p.name}
+        </h1>
+        <p style={{ marginTop: 0, marginBottom: 16, color: '#9aa4b2' }}>
+          Plan sélectionné : <b>{p.slug}</b>
+        </p>
 
-      <form onSubmit={handleSignup} style={{display:'grid',gap:10}}>
-        <input type="email" required placeholder="E‑mail" value={email} onChange={e=>setEmail(e.target.value)} />
-        <input type="password" required placeholder="Mot de passe" value={password} onChange={e=>setPassword(e.target.value)} />
-        <button type="submit">Créer mon compte</button>
-      </form>
-
-      {!!msg && <p style={{marginTop:8}}>{msg} {msg.includes('vérifie tes emails') && (
-        <button onClick={resend} style={{marginLeft:8}}>Renvoyer l’email</button>
-      )}</p>}
-    </div>
+        <Suspense fallback={<p>Chargement…</p>}>
+          <AuthDialog mode="signup" />
+        </Suspense>
+      </div>
+    </main>
   )
 }
