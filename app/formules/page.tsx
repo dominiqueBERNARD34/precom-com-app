@@ -1,61 +1,107 @@
-'use client'
+// /app/formules/page.tsx  (SERVER)
+import Link from 'next/link';
+import { allPlans } from '@/lib/plans';
 
-import { useMemo } from 'react'
-import { useSearchParams } from 'next/navigation'
-
-const Card: React.FC<{
-  title: string; price: string; features: string[]; plan: string
-}> = ({ title, price, features, plan }) => (
-  <div style={{
-    border:'1px solid #1f2937', borderRadius:16, padding:20,
-    background:'#0b1220', color:'#e5e7eb', display:'grid', gap:12
-  }}>
-    <div style={{fontSize:18, fontWeight:700}}>{title}</div>
-    <div style={{fontSize:26, fontWeight:800}}>{price}</div>
-    <ul style={{margin:0, paddingLeft:18, color:'#9ca3af'}}>
-      {features.map((f,i)=><li key={i}>{f}</li>)}
-    </ul>
-    <a href={`/inscription?plan=${encodeURIComponent(plan)}`}
-       style={{
-         marginTop:8, textAlign:'center', padding:'10px 14px',
-         borderRadius:10, background:'#22c55e', color:'#0b1220',
-         fontWeight:700, textDecoration:'none'
-       }}>
-      Choisir {title}
-    </a>
-  </div>
-);
-
-export default function Pricing() {
-  const sp = useSearchParams()
-  const highlight = sp.get('h') // optionnel pour mettre en avant un plan
-
-  const cards = useMemo(()=>[
-    { title:'Starter', price:'Gratuit', plan:'starter',
-      features:['1 projet','Import Excel','Arbo pré-com/Com'] },
-    { title:'Pro', price:'29 € / mois', plan:'pro',
-      features:['Projets illimités','Réserves & fiches','Exports avancés'] },
-    { title:'Entreprise', price:'Sur devis', plan:'entreprise',
-      features:['SSO & rôles','Support prioritaire','Intégrations (ERP, CMMS)'] },
-  ],[])
-
+export default function Page() {
   return (
-    <div style={{maxWidth:980, margin:'24px auto', color:'#e5e7eb'}}>
-      <h1 style={{fontSize:28, margin:'0 0 8px'}}>Formules PRECOM‑COM</h1>
-      <p style={{marginTop:0, color:'#9ca3af'}}>
-        Choisissez une formule pour démarrer. L’étape suivante vous demandera simplement de vous identifier.
+    <div style={{ maxWidth: 1160, margin: '0 auto', padding: '32px 16px' }}>
+      <h1 style={{ fontSize: 40, textAlign: 'center', marginBottom: 8 }}>
+        Choisissez votre formule
+      </h1>
+      <p style={{ textAlign: 'center', color: '#9aa4b2', marginTop: 0 }}>
+        Passez de l’essai gratuit à la version pro quand vous voulez.
       </p>
-      <div style={{
-        display:'grid', gap:16,
-        gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))'
-      }}>
-        {cards.map(c=>(
-          <div key={c.plan}
-               style={{outline: highlight===c.plan ? '2px solid #22c55e' : 'none', borderRadius:18}}>
-            <Card {...c}/>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(5, minmax(220px, 1fr))',
+          gap: 12,
+          marginTop: 24,
+        }}
+      >
+        {allPlans.map((p) => (
+          <div
+            key={p.slug}
+            style={{
+              background: '#0f172a',
+              border: '1px solid #1e293b',
+              borderRadius: 12,
+              padding: 16,
+              position: 'relative',
+              color: '#e2e8f0',
+            }}
+          >
+            {p.badge && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: 10,
+                  right: 10,
+                  fontSize: 12,
+                  background: '#123b2a',
+                  color: '#34d399',
+                  border: '1px solid #2e7a5b',
+                  padding: '2px 8px',
+                  borderRadius: 999,
+                }}
+              >
+                {p.badge}
+              </span>
+            )}
+
+            <div style={{ color: '#cbd5e1', fontWeight: 600, marginBottom: 8 }}>
+              {p.name}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <div style={{ fontSize: 34, fontWeight: 800 }}>
+                {p.price.toLocaleString('fr-FR', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </div>
+              <div style={{ color: '#94a3b8' }}>€ / mois</div>
+            </div>
+
+            <ul
+              style={{
+                listStyle: 'none',
+                padding: 0,
+                margin: '12px 0',
+                color: '#9aa4b2',
+                display: 'grid',
+                gap: 6,
+              }}
+            >
+              <li>✅ Projets : {p.limits.projects}</li>
+              <li>✅ Systèmes / projet : {p.limits.systemsPerProject}</li>
+              <li>✅ Sous-systèmes / système : {p.limits.subsPerSystem}</li>
+            </ul>
+
+            <Link
+              href={`/inscription?plan=${p.slug}`}
+              style={{
+                display: 'block',
+                textAlign: 'center',
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: 10,
+                background: '#1f2a44',
+                border: '1px solid #263043',
+                color: '#e2e8f0',
+                textDecoration: 'none',
+              }}
+            >
+              Choisir
+            </Link>
           </div>
         ))}
       </div>
+
+      <p style={{ textAlign: 'center', color: '#9aa4b2', marginTop: 18 }}>
+        Paiement sécurisé • Annulation à tout moment • Assistance par e‑mail.
+      </p>
     </div>
-  )
+  );
 }
