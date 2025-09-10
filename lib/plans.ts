@@ -4,7 +4,7 @@ export type PlanSlug = 'free' | 'starter' | 'growth' | 'business' | 'pro';
 export type Plan = {
   slug: PlanSlug;
   name: string;
-  price: number; // €/mois (affichage)
+  price: number; // €/mois
   badge?: 'Populaire';
   limits: { projects: number; systemsPerProject: number; subsPerSystem: number };
 };
@@ -43,11 +43,8 @@ export const PLANS: Record<PlanSlug, Plan> = {
   },
 };
 
-// Tableau prêt pour .map()
-export const allPlans: Plan[] = Object.values(PLANS);
-
-// Sélection robuste depuis un slug d’URL (fallback sur 'starter')
+// 👉 La fonction dont on parle :
 export function planBySlug(slug?: string | null): Plan {
-  const key = (slug ?? 'starter') as PlanSlug;
+  const key = (slug ?? 'starter').toLowerCase() as PlanSlug;
   return PLANS[key] ?? PLANS.starter;
 }
