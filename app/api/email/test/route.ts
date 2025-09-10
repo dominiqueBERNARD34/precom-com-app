@@ -1,59 +1,30 @@
-// app/api/email/test/route.ts
 import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 
-// Force Node runtime (SDK Resend côté Node)
-export const runtime = 'nodejs'
+const resend = new Resend(process.env.RESEND_API_KEY || '')
+const FROM = process.env.RESEND_FROM || 'precom-com <onboarding@resend.dev>'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-const FROM = process.env.MAIL_FROM || 'Precom-com <noreply@precom-com.com>'
-const DEFAULT_TO = process.env.MAIL_TEST_TO // facultatif
-
+// GET /api/email/test?to=dest@exemple.com
 export async function GET(req: Request) {
-  try {
-    const url = new URL(req.url)
-    const to = url.searchParams.get('to') || DEFAULT_TO
-    if (!to) {
-      return NextResponse.json(
-        { ok: false, error: 'Paramètre "to" manquant (ou variable MAIL_TEST_TO non définie)' },
-        { status: 400 }
-      )
-    }
+  const { searchParams } = new URL(req.url)
+  const to = searchParams.get('to') || process.env.RESEND_TEST_TO
 
-    const { id } = await resend.emails.send({
-      from: FROM,
-      to,
-      subject: 'Test precom-com ✅',
-      html: `<p>Ça marche ✅ – environnement: ${process.env.VERCEL_ENV || 'local'}</p>`
-    })
-
-    return NextResponse.json({ ok: true, id })
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message || String(e) }, { status: 500 })
+  if (!to) {
+    return NextResponse.json({ error: 'Missing "to" query param or RESEND_TEST_TO' }, { status: 400 })
   }
-}
 
-export async function POST(req: Request) {
-  try {
-    const body = await req.json().catch(() => ({}))
-    const to = body.to || DEFAULT_TO
-    if (!to) {
-      return NextResponse.json(
-        { ok: false, error: 'Champ "to" requis (ou définis MAIL_TEST_TO)' },
-        { status: 400 }
-      )
-    }
+  const { data, error } = await resend.emails.send({
+    from: FROM,
+    to,
+    subject: 'Test precom-com ✅',
+    html: '<p>Mail de test OK.</p>',
+  })
 
-    const { id } = await resend.emails.send({
-      from: FROM,
-      to,
-      subject: body.subject || 'Test precom-com',
-      html: body.html || '<p>Message de test.</p>',
-      text: body.text
-    })
-
-    return NextResponse.json({ ok: true, id })
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message || String(e) }, { status: 500 })
+  if (error) {
+    // `error` est typé (ResendError) : on renvoie le message clair
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  // Nouveau contrat Resend : l’identifiant est sous `data?.id`
+  return NextResponse.json({ id: data?.id ?? null })
 }
