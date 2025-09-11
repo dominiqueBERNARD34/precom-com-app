@@ -1,22 +1,16 @@
-// /app/inscription/page.tsx  (SERVER)
+// app/inscription/page.tsx  (SERVER)
 import { Suspense } from 'react'
-import NextDynamic from 'next/dynamic'   // <-- renommé
+import dynamic from 'next/dynamic'
 import { planBySlug } from '@/lib/plans'
 
-export default function Page({ searchParams }: { searchParams: { plan?: string } }) {
-  const selected = planBySlug(searchParams.plan)   // ✅ c’est un APPEL de fonction
-  // ...
-}
+// Charger le composant client sans SSR pour éviter les soucis au build
+const AuthDialog = dynamic(() => import('@/components/AuthDialog'), { ssr: false })
 
-
-// Charge le composant client sans SSR pour éviter les soucis de prerender
-const AuthDialog = NextDynamic(() => import('@/components/AuthDialog'), { ssr: false })
-
-// Laisse Next savoir que cette page est dynamique (pas de pré-rendu statique)
+// Indique à Next que la page est dynamique (pas de pré-rendu)
 export const dynamic = 'force-dynamic'
 
 export default function Page({ searchParams }: { searchParams: { plan?: string } }) {
-  // 🔑 C'est la ligne dont on parlait : on lit ?plan=... et on récupère le vrai plan
+  // 🔑 lit ?plan=... et sélectionne un plan valide (fallback starter)
   const selected = planBySlug(searchParams.plan)
 
   return (
@@ -47,7 +41,6 @@ export default function Page({ searchParams }: { searchParams: { plan?: string }
         </p>
 
         <Suspense fallback={<p>Chargement…</p>}>
-          {/* Ton formulaire existant d’AuthDialog (client) */}
           <AuthDialog mode="signup" />
         </Suspense>
       </div>

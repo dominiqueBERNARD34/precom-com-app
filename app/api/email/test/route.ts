@@ -1,26 +1,25 @@
-mkdir -p app/api/email/test
-cat > app/api/email/test/route.ts <<'TS'
+// app/api/email/test/route.ts
 import { NextResponse } from 'next/server'
 import { sendMail } from '@/lib/mailer'
 
-export async function GET() {
-  const to = process.env.MAIL_TEST_TO || process.env.MAIL_FROM
-  if (!to) {
-    return NextResponse.json(
-      { error: 'Définis MAIL_TEST_TO ou MAIL_FROM dans Vercel.' },
-      { status: 400 }
-    )
-  }
+export const runtime = 'nodejs'
 
+export async function GET(req: Request) {
   try {
-    const data = await sendMail({
+    const { searchParams } = new URL(req.url)
+    const to = searchParams.get('to') || process.env.MAIL_TEST_TO
+    if (!to) {
+      return NextResponse.json({ ok: false, error: 'missing "to"' }, { status: 400 })
+    }
+
+    await sendMail({
       to,
-      subject: 'Test Resend — precom-com',
-      text: 'Email de test envoyé via Resend depuis /api/email/test.',
+      subject: 'Test precom-com ✅',
+      text: 'Salut ! Cet e-mail a été envoyé depuis /api/email/test.',
     })
-    return NextResponse.json({ ok: true, data })
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message }, { status: 500 })
+
+    return NextResponse.json({ ok: true })
+  } catch (err: any) {
+    return NextResponse.json({ ok: false, error: err.message || String(err) }, { status: 500 })
   }
 }
-TS
