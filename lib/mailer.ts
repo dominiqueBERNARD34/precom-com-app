@@ -1,49 +1,45 @@
-// lib/mailer.ts
-import 'server-only';
-import { Resend } from 'resend';
+cat > lib/mailer.ts <<'TS'
+import 'server-only'
+import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY || '');
+const resend = new Resend(process.env.RESEND_API_KEY)
+const FROM = process.env.EMAIL_FROM || 'Precom <onboarding@resend.dev>'
 
 export type MailInput = {
-  to: string | string[];
-  subject: string;
-  text?: string;
-  html?: string;
-  replyTo?: string;
-  from?: string; // optionnel pour override ponctuel
-};
-
-function stripHtml(s: string) {
-  return s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  to: string
+  subject: string
+  text?: string
+  html?: string
 }
 
-export async function sendMail(opts: MailInput) {
-  // Sécurise le "from" (utilise la variable d'env ou la valeur fournie)
-  const from =
-    opts.from ||
-    process.env.EMAIL_FROM ||
-    'Precom <onboarding@resend.dev>';
-
-  // Évite les crashs en build si la clé manque (ex: preview sans secrets)
+/**
+ * Envoi d'email via Resend.
+ * - RESEND_API_KEY et EMAIL_FROM doivent être posés dans les variables d'env Vercel
+ * - text est toujours fourni (Resend TS l'exige) : si html est donné, on fabrique un "text" basique.
+ */
+export async function sendMail({ to, subject, text, html }: MailInput) {
   if (!process.env.RESEND_API_KEY) {
-    console.warn('[sendMail] RESEND_API_KEY manquante – envoi ignoré.');
-    return { skipped: true };
+    // En local ou si la clé n'est pas posée : on ne bloque pas, on log et on "skip".
+    console.warn('RESEND_API_KEY manquante — envoi sauté.')
+    return { ok: true, skipped: true }
   }
 
-  const text = opts.text || (opts.html ? stripHtml(opts.html).slice(0, 2000) : ' ');
+  const res = await resend.emails.send({
+    from: FROM,
+    to,
+    subject,
+    text: text ?? (html ? stripHtml(html) : ' '),
+    ...(html ? { html } : {}),
+  })
 
-  const { data, error } = await resend.emails.send({
-    from,
-    to: opts.to,
-    subject: opts.subject,
-    text,
-    ...(opts.html ? { html: opts.html } : {}),
-    ...(opts.replyTo ? { reply_to: opts.replyTo } : {})
-  });
-
-  if (error) {
-    console.error('[sendMail] Resend error:', error);
-    throw error;
+  if (res.error) {
+    throw new Error(res.error.message)
   }
-  return data;
+
+  return res.data
 }
+
+function stripHtml(html: string) {
+  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+TS
