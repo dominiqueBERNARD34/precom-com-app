@@ -1,34 +1,35 @@
 // app/api/email/test/route.ts
-import { NextResponse } from 'next/server'
-import { sendMail } from '@/lib/mailer'
-
-export const runtime = 'nodejs' // exécution côté serveur
+import { NextResponse } from 'next/server';
+import { sendMail } from '@/lib/mailer';
 
 export async function GET(req: Request) {
-  try {
-    const url = new URL(req.url)
-    const to = url.searchParams.get('to') || process.env.MAIL_TEST_TO
-    const subject = url.searchParams.get('sub') || 'Test precom-com ✅'
+  const url = new URL(req.url);
+  const to =
+    url.searchParams.get('to') ??
+    process.env.MAIL_TEST_TO ??
+    undefined;
 
-    if (!to) {
-      return NextResponse.json(
-        { ok: false, error: 'Missing ?to= or MAIL_TEST_TO' },
-        { status: 400 },
-      )
-    }
+  const subject = url.searchParams.get('subject') ?? 'Test precom-com ✅';
 
-    const { id } = await sendMail({
-      to,
-      subject,
-      text: 'Email de test via Resend (texte).',
-      html: '<p>Email de test via <b>Resend</b> (HTML).</p>',
-    })
-
-    return NextResponse.json({ ok: true, id })
-  } catch (err: any) {
+  if (!to) {
     return NextResponse.json(
-      { ok: false, error: err?.message ?? 'send failed' },
-      { status: 500 },
-    )
+      { ok: false, error: 'Missing ?to=recipient@example.com' },
+      { status: 400 }
+    );
   }
+
+  const result = await sendMail({
+    to,
+    subject,
+    text: 'Email de test via Resend (texte).',
+    html: '<p>Email de test via <b>Resend</b> (HTML)</p>',
+  });
+
+  // Code HTTP utile en sortie
+  if (!result.ok) {
+    // si "skipped" (pas de clé), on ne considère pas ça comme une erreur serveur
+    return NextResponse.json(result, { status: result.skipped ? 200 : 500 });
+  }
+
+  return NextResponse.json(result, { status: 200 });
 }

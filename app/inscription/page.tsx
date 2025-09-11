@@ -1,17 +1,16 @@
-/* app/inscription/page.tsx — SERVER */
-import { Suspense } from 'react'
-import NextDynamic from 'next/dynamic'
-import { planBySlug } from '@/lib/plans'
+// app/inscription/page.tsx (SERVER)
+import { Suspense } from 'react';
+import NextDynamic from 'next/dynamic'; // <— on RENOMME l’import pour éviter le conflit
+import { planBySlug } from '@/lib/plans';
 
-// Charge le composant client sans SSR pour éviter les soucis au build
-const AuthDialog = NextDynamic(() => import('@/components/AuthDialog'), { ssr: false })
+// charge le composant client sans SSR
+const AuthDialog = NextDynamic(() => import('@/components/AuthDialog'), { ssr: false });
 
-// Indique à Next que la page est dynamique (pas de pré‑rendu)
-export const dynamic = 'force-dynamic'
+// indique à Next que la page est dynamique
+export const dynamic = 'force-dynamic';
 
 export default function Page({ searchParams }: { searchParams: { plan?: string } }) {
-  // lit ?plan=growth|business|...
-  const selected = planBySlug(searchParams?.plan)
+  const selected = planBySlug(searchParams?.plan);
 
   return (
     <main
@@ -45,6 +44,5 @@ export default function Page({ searchParams }: { searchParams: { plan?: string }
         </Suspense>
       </div>
     </main>
-  )
+  );
 }
-TS
