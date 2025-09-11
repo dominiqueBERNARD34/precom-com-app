@@ -3,6 +3,12 @@ import { Suspense } from 'react'
 import NextDynamic from 'next/dynamic'   // <-- renommé
 import { planBySlug } from '@/lib/plans'
 
+export default function Page({ searchParams }: { searchParams: { plan?: string } }) {
+  const selected = planBySlug(searchParams.plan)   // ✅ c’est un APPEL de fonction
+  // ...
+}
+
+
 // Charge le composant client sans SSR pour éviter les soucis de prerender
 const AuthDialog = NextDynamic(() => import('@/components/AuthDialog'), { ssr: false })
 
