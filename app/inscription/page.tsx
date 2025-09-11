@@ -1,4 +1,3 @@
-cat > app/inscription/page.tsx <<'TS'
 /* app/inscription/page.tsx — SERVER */
 import { Suspense } from 'react'
 import NextDynamic from 'next/dynamic'
