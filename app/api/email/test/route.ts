@@ -1,30 +1,26 @@
+mkdir -p app/api/email/test
+cat > app/api/email/test/route.ts <<'TS'
 import { NextResponse } from 'next/server'
-import { Resend } from 'resend'
+import { sendMail } from '@/lib/mailer'
 
-const resend = new Resend(process.env.RESEND_API_KEY || '')
-const FROM = process.env.RESEND_FROM || 'precom-com <onboarding@resend.dev>'
-
-// GET /api/email/test?to=dest@exemple.com
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url)
-  const to = searchParams.get('to') || process.env.RESEND_TEST_TO
-
+export async function GET() {
+  const to = process.env.MAIL_TEST_TO || process.env.MAIL_FROM
   if (!to) {
-    return NextResponse.json({ error: 'Missing "to" query param or RESEND_TEST_TO' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'Définis MAIL_TEST_TO ou MAIL_FROM dans Vercel.' },
+      { status: 400 }
+    )
   }
 
-  const { data, error } = await resend.emails.send({
-    from: FROM,
-    to,
-    subject: 'Test precom-com ✅',
-    html: '<p>Mail de test OK.</p>',
-  })
-
-  if (error) {
-    // `error` est typé (ResendError) : on renvoie le message clair
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  try {
+    const data = await sendMail({
+      to,
+      subject: 'Test Resend — precom-com',
+      text: 'Email de test envoyé via Resend depuis /api/email/test.',
+    })
+    return NextResponse.json({ ok: true, data })
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e?.message }, { status: 500 })
   }
-
-  // Nouveau contrat Resend : l’identifiant est sous `data?.id`
-  return NextResponse.json({ id: data?.id ?? null })
 }
+TS
