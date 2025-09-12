@@ -1,13 +1,13 @@
 // app/inscription/page.tsx (SERVER)
 import { Suspense } from 'react'
-import dynamic from 'next/dynamic'
+import NextDynamic from 'next/dynamic'
 import { planBySlug } from '@/lib/plans'
 
 // page dynamique (pas de prerender) pour éviter les soucis SSR
 export const dynamic = 'force-dynamic'
 
 // On charge le composant client sans SSR
-const AuthDialog = dynamic(() => import('@/components/AuthDialog'), { ssr: false })
+const AuthDialog = NextDynamic(() => import('@/components/AuthDialog'), { ssr: false })
 
 export default function Page({ searchParams }: { searchParams: { plan?: string } }) {
   const selected = planBySlug(searchParams?.plan)
