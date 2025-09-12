@@ -2,32 +2,27 @@
 import { NextResponse } from 'next/server'
 import { sendMail } from '@/lib/mailer'
 
-export const runtime = 'nodejs' // Resend nécessite Node (pas Edge)
+export const runtime = 'nodejs' // ⚠️ important pour Resend (SDK Node)
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url)
-  const to = searchParams.get('to') || process.env.MAIL_TEST_TO
+  const url = new URL(req.url)
+  const to = url.searchParams.get('to') || process.env.MAIL_TEST_TO || ''
+  const subject = url.searchParams.get('subject') || 'Test precom-com ✅'
 
   if (!to) {
     return NextResponse.json(
-      { ok: false, error: 'Provide ?to=… or define MAIL_TEST_TO env var' },
-      { status: 400 },
+      { ok: false, error: 'Missing ?to=address' },
+      { status: 400 }
     )
   }
 
   const result = await sendMail({
     to,
-    subject: 'Test precom-com ✅',
-    text: 'E-mail de test via Resend.',
-    html: '<p><b>Bonjour</b>, ceci est un e‑mail de test via Resend.</p>',
+    subject,
+    text: 'Email de test via Resend (texte).',
+    html: '<p>Email de test via <b>Resend</b> (HTML).</p>',
   })
 
-  // résultat toujours non null → on gère les codes correctement
-  if (!result.ok) {
-    // si manquait la clé, on a { skipped: true } → 200 pour ne pas casser le build
-    const status = (result as any).skipped ? 200 : 500
-    return NextResponse.json(result, { status })
-  }
-
-  return NextResponse.json({ ok: true, id: result.id, to })
+  const status = result.ok ? 200 : result.skipped ? 200 : 500
+  return NextResponse.json(result, { status })
 }
